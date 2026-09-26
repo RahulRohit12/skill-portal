@@ -27,10 +27,6 @@ interface MonthRow {
 interface SubjectData {
   id: string;
   name: string;
-  totalClasses: number;
-  presentClasses: number;
-  absentClasses: number;
-  percentage: number;
   months: MonthRow[];
 }
 
@@ -48,21 +44,22 @@ export const DashboardAttendanceMatrix: React.FC<{ onOpenQrModal?: () => void }>
     subjectName: string;
   } | null>(null);
 
-  // Live real scan records fetched from existing backend endpoints (0 backend changes required)
-  const [liveScans, setLiveScans] = useState<Record<string, { status: string; markedAt?: string; source?: string }>>({});
+  // Live real scan records fetched from existing backend endpoints (0 backend changes)
+  const [liveScans, setLiveScans] = useState<Record<string, { status: string; markedAt?: string; source?: string; title?: string }>>({});
 
   useEffect(() => {
-    // Check existing attendance endpoints to overlay any real QR scans that happened today/recently
+    // 1. Fetch student overall attendance & recent history
     api.get('/attendance')
       .then((res) => {
         if (res.data?.data?.history) {
-          const map: Record<string, { status: string; markedAt?: string; source?: string }> = {};
+          const map: Record<string, { status: string; markedAt?: string; source?: string; title?: string }> = {};
           res.data.data.history.forEach((h: any) => {
             if (h.sessionDate) {
               map[h.sessionDate] = {
                 status: h.status,
                 markedAt: h.remarks,
-                source: h.remarks?.includes('QR') ? 'QR_SCAN' : 'MANUAL'
+                source: h.remarks?.includes('QR') ? 'QR_SCAN' : 'MANUAL',
+                title: h.sessionTitle
               };
             }
           });
@@ -71,35 +68,36 @@ export const DashboardAttendanceMatrix: React.FC<{ onOpenQrModal?: () => void }>
       })
       .catch(() => {});
 
-    // Also check current month's calendar
-    const now = new Date();
-    api.get('/attendance/calendar', {
-      params: { year: now.getFullYear(), month: now.getMonth() + 1 }
-    })
-      .then((res) => {
-        if (res.data?.data?.days) {
-          const map: Record<string, { status: string; markedAt?: string; source?: string }> = {};
-          res.data.data.days.forEach((d: any) => {
-            if (d.date && d.status !== 'NO_SESSION') {
-              map[d.date] = {
-                status: d.status,
-                markedAt: d.markedAt,
-                source: d.source || 'QR_SCAN'
-              };
-            }
-          });
-          setLiveScans((prev) => ({ ...prev, ...map }));
-        }
+    // 2. Fetch real calendar records for June, July, August, September from existing backend
+    const currentYear = new Date().getFullYear();
+    [6, 7, 8, 9].forEach((mNum) => {
+      api.get('/attendance/calendar', {
+        params: { year: currentYear, month: mNum }
       })
-      .catch(() => {});
+        .then((res) => {
+          if (res.data?.data?.days) {
+            const map: Record<string, { status: string; markedAt?: string; source?: string; title?: string }> = {};
+            res.data.data.days.forEach((d: any) => {
+              if (d.date && d.status && d.status !== 'NO_SESSION') {
+                map[d.date] = {
+                  status: d.status,
+                  markedAt: d.markedAt,
+                  source: d.source || 'QR_SCAN',
+                  title: d.sessionTitle
+                };
+              }
+            });
+            setLiveScans((prev) => ({ ...prev, ...map }));
+          }
+        })
+        .catch(() => {});
+    });
   }, []);
 
-  // Helper to build 31-day map with specific Present and Absent days matching reference image
+  // Helper to build 31-day map with ONLY real scans and weekend week-offs (all sample marks cleared)
   const buildMonthDays = (
     daysInMonth: number,
     weekendDays: number[],
-    presentDays: number[],
-    absentDays: number[],
     topicPrefix: string,
     monthNum: number
   ): Record<number, DayItem> => {
@@ -110,35 +108,21 @@ export const DashboardAttendanceMatrix: React.FC<{ onOpenQrModal?: () => void }>
         continue;
       }
 
-      // Check if real live scan occurred for 2026-MM-DD
+      // Check if real live scan or recorded session exists for this date
       const dateKey = `2026-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       if (liveScans[dateKey]) {
         const scan = liveScans[dateKey];
         map[d] = {
           day: d,
           status: scan.status === 'PRESENT' ? 'PRESENT' : 'ABSENT',
-          title: `${topicPrefix}: Lecture ${d}`,
+          title: scan.title || `${topicPrefix} Session`,
           source: scan.source || 'QR_SCAN',
           markedAt: scan.markedAt
         };
         continue;
       }
 
-      if (presentDays.includes(d)) {
-        map[d] = {
-          day: d,
-          status: 'PRESENT',
-          title: `${topicPrefix}: Lecture & Code Analysis`,
-          source: 'QR_SCAN'
-        };
-      } else if (absentDays.includes(d)) {
-        map[d] = {
-          day: d,
-          status: 'ABSENT',
-          title: `${topicPrefix}: Scheduled Session`,
-          source: 'MANUAL'
-        };
-      } else if (weekendDays.includes(d)) {
+      if (weekendDays.includes(d)) {
         map[d] = {
           day: d,
           status: 'WEEK_OFF'
@@ -153,56 +137,27 @@ export const DashboardAttendanceMatrix: React.FC<{ onOpenQrModal?: () => void }>
     return map;
   };
 
-  // Full datasets matching reference image
-  // Core Java: 71 classes, 36 present, 35 missed = 51% attended
-  const coreJavaMonths: MonthRow[] = [
+  // Month rows: Jun, July, Aug, Sep (clean real data only)
+  const buildCleanMonths = (subjectTitle: string): MonthRow[] => [
     {
       name: 'Jun',
       monthIndex: 6,
-      days: buildMonthDays(
-        30,
-        [6, 7, 13, 14, 20, 21, 27, 28], // weekends
-        [24, 29, 30], // present matching screenshot
-        [16, 17, 18, 19, 22, 23, 25, 26], // absent matching screenshot
-        'Core Java',
-        6
-      )
+      days: buildMonthDays(30, [6, 7, 13, 14, 20, 21, 27, 28], subjectTitle, 6)
     },
     {
       name: 'July',
       monthIndex: 7,
-      days: buildMonthDays(
-        31,
-        [4, 5, 11, 12, 18, 19, 25, 26], // weekends
-        [1, 2, 3, 6, 8, 9, 20, 24, 29, 30, 31], // present matching screenshot
-        [7, 10, 13, 14, 15, 16, 17, 21, 22, 23, 27, 28], // absent matching screenshot
-        'Core Java',
-        7
-      )
+      days: buildMonthDays(31, [4, 5, 11, 12, 18, 19, 25, 26], subjectTitle, 7)
     },
     {
       name: 'Aug',
       monthIndex: 8,
-      days: buildMonthDays(
-        31,
-        [1, 2, 8, 9, 15, 16, 22, 23, 30], // weekends
-        [3, 6, 7, 11, 13, 14, 19, 21, 26, 27, 28, 29], // present matching screenshot
-        [4, 5, 12, 18, 20, 25, 31], // absent matching screenshot
-        'Core Java',
-        8
-      )
+      days: buildMonthDays(31, [1, 2, 8, 9, 15, 16, 22, 23, 30], subjectTitle, 8)
     },
     {
       name: 'Sep',
       monthIndex: 9,
-      days: buildMonthDays(
-        30,
-        [5, 6, 12, 13, 19, 20, 26, 27], // weekends
-        [2, 3, 15, 17, 18, 21, 22, 24], // present matching screenshot
-        [1, 4, 7, 8, 9, 10, 11, 16, 23, 25], // absent matching screenshot
-        'Core Java',
-        9
-      )
+      days: buildMonthDays(30, [5, 6, 12, 13, 19, 20, 26, 27], subjectTitle, 9)
     }
   ];
 
@@ -211,196 +166,61 @@ export const DashboardAttendanceMatrix: React.FC<{ onOpenQrModal?: () => void }>
     'core-java': {
       id: 'core-java',
       name: 'Core Java',
-      totalClasses: 71,
-      presentClasses: 36,
-      absentClasses: 35,
-      percentage: 51,
-      months: coreJavaMonths
+      months: buildCleanMonths('Core Java')
     },
     'programming': {
       id: 'programming',
       name: 'Programming',
-      totalClasses: 48,
-      presentClasses: 41,
-      absentClasses: 7,
-      percentage: 85,
-      months: [
-        {
-          name: 'Jun',
-          monthIndex: 6,
-          days: buildMonthDays(30, [6, 7, 13, 14, 20, 21, 27, 28], [17, 19, 24, 26, 30], [23], 'Programming', 6)
-        },
-        {
-          name: 'July',
-          monthIndex: 7,
-          days: buildMonthDays(31, [4, 5, 11, 12, 18, 19, 25, 26], [1, 3, 7, 8, 10, 14, 16, 21, 23, 28, 30], [15, 22], 'Programming', 7)
-        },
-        {
-          name: 'Aug',
-          monthIndex: 8,
-          days: buildMonthDays(31, [1, 2, 8, 9, 15, 16, 22, 23, 30], [4, 6, 11, 13, 18, 20, 25, 27], [12, 19], 'Programming', 8)
-        },
-        {
-          name: 'Sep',
-          monthIndex: 9,
-          days: buildMonthDays(30, [5, 6, 12, 13, 19, 20, 26, 27], [1, 3, 8, 10, 15, 17, 22, 24], [2, 9], 'Programming', 9)
-        }
-      ]
+      months: buildCleanMonths('Programming')
     },
     'sql': {
       id: 'sql',
       name: 'SQL',
-      totalClasses: 34,
-      presentClasses: 27,
-      absentClasses: 7,
-      percentage: 79,
-      months: [
-        {
-          name: 'Jun',
-          monthIndex: 6,
-          days: buildMonthDays(30, [6, 7, 13, 14, 20, 21, 27, 28], [18, 25], [29], 'SQL', 6)
-        },
-        {
-          name: 'July',
-          monthIndex: 7,
-          days: buildMonthDays(31, [4, 5, 11, 12, 18, 19, 25, 26], [2, 9, 16, 23, 30], [7, 21], 'SQL', 7)
-        },
-        {
-          name: 'Aug',
-          monthIndex: 8,
-          days: buildMonthDays(31, [1, 2, 8, 9, 15, 16, 22, 23, 30], [6, 13, 20, 27], [4, 18], 'SQL', 8)
-        },
-        {
-          name: 'Sep',
-          monthIndex: 9,
-          days: buildMonthDays(30, [5, 6, 12, 13, 19, 20, 26, 27], [3, 10, 17, 24], [8, 22], 'SQL', 9)
-        }
-      ]
+      months: buildCleanMonths('SQL')
     },
     'advanced-java': {
       id: 'advanced-java',
       name: 'Advanced Java',
-      totalClasses: 42,
-      presentClasses: 28,
-      absentClasses: 14,
-      percentage: 67,
-      months: [
-        {
-          name: 'Jun',
-          monthIndex: 6,
-          days: buildMonthDays(30, [6, 7, 13, 14, 20, 21, 27, 28], [22, 29], [16, 23], 'Advanced Java', 6)
-        },
-        {
-          name: 'July',
-          monthIndex: 7,
-          days: buildMonthDays(31, [4, 5, 11, 12, 18, 19, 25, 26], [6, 13, 20, 27], [1, 8, 15, 22, 29], 'Advanced Java', 7)
-        },
-        {
-          name: 'Aug',
-          monthIndex: 8,
-          days: buildMonthDays(31, [1, 2, 8, 9, 15, 16, 22, 23, 30], [3, 10, 17, 24, 31], [5, 12, 19, 26], 'Advanced Java', 8)
-        },
-        {
-          name: 'Sep',
-          monthIndex: 9,
-          days: buildMonthDays(30, [5, 6, 12, 13, 19, 20, 26, 27], [7, 14, 21], [2, 9, 16, 23], 'Advanced Java', 9)
-        }
-      ]
+      months: buildCleanMonths('Advanced Java')
     },
     'soft-skills': {
       id: 'soft-skills',
       name: 'Soft Skills',
-      totalClasses: 22,
-      presentClasses: 20,
-      absentClasses: 2,
-      percentage: 91,
-      months: [
-        {
-          name: 'Jun',
-          monthIndex: 6,
-          days: buildMonthDays(30, [6, 7, 13, 14, 20, 21, 27, 28], [19, 26], [], 'Soft Skills', 6)
-        },
-        {
-          name: 'July',
-          monthIndex: 7,
-          days: buildMonthDays(31, [4, 5, 11, 12, 18, 19, 25, 26], [3, 10, 17, 24, 31], [14], 'Soft Skills', 7)
-        },
-        {
-          name: 'Aug',
-          monthIndex: 8,
-          days: buildMonthDays(31, [1, 2, 8, 9, 15, 16, 22, 23, 30], [7, 14, 21, 28], [], 'Soft Skills', 8)
-        },
-        {
-          name: 'Sep',
-          monthIndex: 9,
-          days: buildMonthDays(30, [5, 6, 12, 13, 19, 20, 26, 27], [4, 11, 18, 25], [15], 'Soft Skills', 9)
-        }
-      ]
+      months: buildCleanMonths('Soft Skills')
     },
     'html-css': {
       id: 'html-css',
       name: 'HTML & CSS',
-      totalClasses: 28,
-      presentClasses: 24,
-      absentClasses: 4,
-      percentage: 86,
-      months: [
-        {
-          name: 'Jun',
-          monthIndex: 6,
-          days: buildMonthDays(30, [6, 7, 13, 14, 20, 21, 27, 28], [16, 23, 30], [], 'HTML & CSS', 6)
-        },
-        {
-          name: 'July',
-          monthIndex: 7,
-          days: buildMonthDays(31, [4, 5, 11, 12, 18, 19, 25, 26], [7, 14, 21, 28], [2, 16], 'HTML & CSS', 7)
-        },
-        {
-          name: 'Aug',
-          monthIndex: 8,
-          days: buildMonthDays(31, [1, 2, 8, 9, 15, 16, 22, 23, 30], [4, 11, 18, 25], [6], 'HTML & CSS', 8)
-        },
-        {
-          name: 'Sep',
-          monthIndex: 9,
-          days: buildMonthDays(30, [5, 6, 12, 13, 19, 20, 26, 27], [1, 8, 15, 22], [9], 'HTML & CSS', 9)
-        }
-      ]
+      months: buildCleanMonths('HTML & CSS')
     },
     'python': {
       id: 'python',
       name: 'Python',
-      totalClasses: 32,
-      presentClasses: 23,
-      absentClasses: 9,
-      percentage: 72,
-      months: [
-        {
-          name: 'Jun',
-          monthIndex: 6,
-          days: buildMonthDays(30, [6, 7, 13, 14, 20, 21, 27, 28], [20, 27], [18], 'Python', 6)
-        },
-        {
-          name: 'July',
-          monthIndex: 7,
-          days: buildMonthDays(31, [4, 5, 11, 12, 18, 19, 25, 26], [4, 11, 18, 25], [1, 8, 15], 'Python', 7)
-        },
-        {
-          name: 'Aug',
-          monthIndex: 8,
-          days: buildMonthDays(31, [1, 2, 8, 9, 15, 16, 22, 23, 30], [1, 8, 15, 22, 29], [12, 26], 'Python', 8)
-        },
-        {
-          name: 'Sep',
-          monthIndex: 9,
-          days: buildMonthDays(30, [5, 6, 12, 13, 19, 20, 26, 27], [5, 12, 19, 26], [2, 16], 'Python', 9)
-        }
-      ]
+      months: buildCleanMonths('Python')
     }
   };
 
   const currentSubject = subjects[activeSubject] || subjects['core-java'];
   const dayNumbers = Array.from({ length: 31 }, (_, i) => i + 1);
+
+  // Compute real dynamic statistics based strictly on verified sessions / scans
+  let realTotal = 0;
+  let realPresent = 0;
+  let realAbsent = 0;
+
+  currentSubject.months.forEach((m) => {
+    Object.values(m.days).forEach((d) => {
+      if (d.status === 'PRESENT') {
+        realTotal++;
+        realPresent++;
+      } else if (d.status === 'ABSENT') {
+        realTotal++;
+        realAbsent++;
+      }
+    });
+  });
+
+  const percentage = realTotal > 0 ? Math.round((realPresent / realTotal) * 100) : 100;
 
   const getPercentageColor = (pct: number) => {
     if (pct < 60) return 'text-[#f87171]';
@@ -474,11 +294,11 @@ export const DashboardAttendanceMatrix: React.FC<{ onOpenQrModal?: () => void }>
 
       {/* 3. Summary Stats Row & Legend */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1 pb-3 border-b border-[#1b202a]">
-        {/* Left: 51% attended | 36 of 71 classes attended · 35 missed */}
+        {/* Left: Dynamic Real Percentage & Class Counts */}
         <div className="flex flex-wrap items-baseline gap-2 sm:gap-3">
           <div className="flex items-baseline gap-1.5">
-            <span className={`text-2xl sm:text-3xl font-black tracking-tight ${getPercentageColor(currentSubject.percentage)}`}>
-              {currentSubject.percentage}%
+            <span className={`text-2xl sm:text-3xl font-black tracking-tight ${getPercentageColor(percentage)}`}>
+              {percentage}%
             </span>
             <span className="text-xs sm:text-sm text-slate-400 font-semibold">
               attended
@@ -489,10 +309,10 @@ export const DashboardAttendanceMatrix: React.FC<{ onOpenQrModal?: () => void }>
 
           <div className="text-xs sm:text-sm text-slate-300 font-medium">
             <span className="font-extrabold text-white">
-              {currentSubject.presentClasses} of {currentSubject.totalClasses} classes attended
+              {realPresent} of {realTotal} classes attended
             </span>
             <span className="text-slate-400 ml-1.5">
-              · {currentSubject.absentClasses} missed
+              · {realAbsent} missed
             </span>
           </div>
         </div>
