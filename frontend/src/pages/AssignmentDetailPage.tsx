@@ -99,7 +99,7 @@ export const AssignmentDetailPage: React.FC = () => {
   const loadData = async () => {
     if (!id) return;
     try {
-      const res = await api.get(`/assignments/${id}`);
+      const res = await api.get(`/assignments/${id}`, { skipCache: true } as any);
       const data = res.data.data;
       setAssignment(data);
       if (data) {
@@ -116,6 +116,22 @@ export const AssignmentDetailPage: React.FC = () => {
   useEffect(() => {
     loadData();
     refreshHierarchy();
+
+    // Auto-refresh when user focuses tab/browser so admin additions sync in real-time across devices
+    const handleFocus = () => {
+      loadData();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    // Periodic sync every 10 seconds
+    const interval = setInterval(() => {
+      loadData();
+    }, 10000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
   }, [id]);
 
   const toggleTopicExpand = (topicId: number) => {

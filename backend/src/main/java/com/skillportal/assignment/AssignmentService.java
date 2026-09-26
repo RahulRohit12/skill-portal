@@ -38,7 +38,7 @@ public class AssignmentService {
         return assignmentRepository.createSection(assignmentId, req.getTopicName(), req.getTitle(), req.getDescription());
     }
 
-    public List<AssignmentDto.QuestionSummary> createQuestionsForSection(Long sectionId, List<AssignmentDto.CreateQuestionItem> questions) {
-        return assignmentRepository.createQuestionsForSection(sectionId, questions);
+    public List<AssignmentDto.QuestionSummary> createQuestionsForSection(Long assignmentId, Long sectionId, List<AssignmentDto.CreateQuestionItem> questions) {
+        return assignmentRepository.createQuestionsForSection(assignmentId, sectionId, questions);
     }
 }

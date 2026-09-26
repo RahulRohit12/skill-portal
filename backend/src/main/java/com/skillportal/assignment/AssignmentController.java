@@ -66,7 +66,16 @@ public class AssignmentController {
             @PathVariable Long id,
             @PathVariable Long sectionId,
             @RequestBody List<AssignmentDto.CreateQuestionItem> questions) {
-        List<AssignmentDto.QuestionSummary> created = assignmentService.createQuestionsForSection(sectionId, questions);
+        List<AssignmentDto.QuestionSummary> created = assignmentService.createQuestionsForSection(id, sectionId, questions);
+        return ResponseEntity.ok(ApiResponse.success("Questions added successfully", created));
+    }
+
+    @PostMapping("/sections/{sectionId}/questions/batch")
+    @Operation(summary = "Fallback batch add coding questions (defaults to Assignment 3)")
+    public ResponseEntity<ApiResponse<List<AssignmentDto.QuestionSummary>>> createQuestionsForSectionFallback(
+            @PathVariable Long sectionId,
+            @RequestBody List<AssignmentDto.CreateQuestionItem> questions) {
+        List<AssignmentDto.QuestionSummary> created = assignmentService.createQuestionsForSection(3L, sectionId, questions);
         return ResponseEntity.ok(ApiResponse.success("Questions added successfully", created));
     }
 }

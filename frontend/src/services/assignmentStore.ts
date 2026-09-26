@@ -49,34 +49,65 @@ export interface SubTopic {
   status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
 }
 
-const STORAGE_KEY = 'sp_assignment_hierarchy_v4';
+const STORAGE_KEY = 'sp_assignment_hierarchy_v5';
 const SOLVED_KEY = 'sp_solved_questions_v3';
 
-// Default Topics for "Programming"
+// Default Topics for "Programming" (Assignment 3) and Assignment 1
 export const DEFAULT_TOPICS: Topic[] = [
+  // For Assignment 3 ("Programming")
   {
     id: 1,
-    assignmentId: 1,
+    assignmentId: 3,
     title: 'Data Types',
     description: 'Primitive types, Scanner input, type casting, arithmetic operators',
     orderIndex: 1,
   },
   {
     id: 2,
-    assignmentId: 1,
+    assignmentId: 3,
     title: 'If Else & Conditionals',
     description: 'Branching decisions, logical conditions, comparison operators',
     orderIndex: 2,
   },
   {
     id: 3,
-    assignmentId: 1,
+    assignmentId: 3,
     title: 'Loops & Iterations',
     description: 'For loops, while loops, accumulator logic, nested iteration patterns',
     orderIndex: 3,
   },
   {
     id: 4,
+    assignmentId: 3,
+    title: 'Array',
+    description: 'Linear arrays, subarrays, multidimensional arrays, two pointers',
+    orderIndex: 4,
+  },
+
+  // For Assignment 1
+  {
+    id: 11,
+    assignmentId: 1,
+    title: 'Data Types',
+    description: 'Primitive types, Scanner input, type casting, arithmetic operators',
+    orderIndex: 1,
+  },
+  {
+    id: 12,
+    assignmentId: 1,
+    title: 'If Else & Conditionals',
+    description: 'Branching decisions, logical conditions, comparison operators',
+    orderIndex: 2,
+  },
+  {
+    id: 13,
+    assignmentId: 1,
+    title: 'Loops & Iterations',
+    description: 'For loops, while loops, accumulator logic, nested iteration patterns',
+    orderIndex: 3,
+  },
+  {
+    id: 14,
     assignmentId: 1,
     title: 'Array',
     description: 'Linear arrays, subarrays, multidimensional arrays, two pointers',
@@ -86,11 +117,11 @@ export const DEFAULT_TOPICS: Topic[] = [
 
 // Default Sub-topics grouped under Topics
 export const DEFAULT_SUBTOPICS: SubTopic[] = [
-  // Under Topic 1: Data Types
+  // Under Assignment 3 ("Programming")
   {
     id: 1,
     topicId: 1,
-    assignmentId: 1,
+    assignmentId: 3,
     sectionNumber: 1,
     title: 'Primitive Types & Scanner',
     description: 'Variables, inputs, scanner reading, arithmetic expressions',
@@ -101,11 +132,10 @@ export const DEFAULT_SUBTOPICS: SubTopic[] = [
     locked: false,
     status: 'COMPLETED',
   },
-  // Under Topic 2: If Else
   {
     id: 2,
     topicId: 2,
-    assignmentId: 1,
+    assignmentId: 3,
     sectionNumber: 2,
     title: 'Conditionals & Branching',
     description: 'If-else statements, relational operators, ternary logic',
@@ -116,11 +146,10 @@ export const DEFAULT_SUBTOPICS: SubTopic[] = [
     locked: false,
     status: 'IN_PROGRESS',
   },
-  // Under Topic 3: Loops
   {
     id: 3,
     topicId: 3,
-    assignmentId: 1,
+    assignmentId: 3,
     sectionNumber: 3,
     title: 'Loops & Iterations',
     description: 'For loops, while loops, accumulator patterns',
@@ -131,11 +160,10 @@ export const DEFAULT_SUBTOPICS: SubTopic[] = [
     locked: false,
     status: 'NOT_STARTED',
   },
-  // Under Topic 4: Array
   {
     id: 4,
     topicId: 4,
-    assignmentId: 1,
+    assignmentId: 3,
     sectionNumber: 4,
     title: 'Array Traversal',
     description: '1D array manipulation, element searching, extrema finding',
@@ -149,7 +177,7 @@ export const DEFAULT_SUBTOPICS: SubTopic[] = [
   {
     id: 5,
     topicId: 4,
-    assignmentId: 1,
+    assignmentId: 3,
     sectionNumber: 5,
     title: 'Sub-array',
     description: 'Sub-array slices, sliding windows, subarray sums',
@@ -163,6 +191,92 @@ export const DEFAULT_SUBTOPICS: SubTopic[] = [
   {
     id: 6,
     topicId: 4,
+    assignmentId: 3,
+    sectionNumber: 6,
+    title: 'Multiple Array (2D Matrix)',
+    description: 'Multi-dimensional arrays, rows, columns, and matrix traversal',
+    questionCount: 1,
+    solvedCount: 0,
+    totalMarks: 10,
+    marksObtained: 0,
+    locked: false,
+    status: 'NOT_STARTED',
+  },
+
+  // Under Assignment 1
+  {
+    id: 11,
+    topicId: 11,
+    assignmentId: 1,
+    sectionNumber: 1,
+    title: 'Primitive Types & Scanner',
+    description: 'Variables, inputs, scanner reading, arithmetic expressions',
+    questionCount: 6,
+    solvedCount: 6,
+    totalMarks: 60,
+    marksObtained: 60,
+    locked: false,
+    status: 'COMPLETED',
+  },
+  {
+    id: 12,
+    topicId: 12,
+    assignmentId: 1,
+    sectionNumber: 2,
+    title: 'Conditionals & Branching',
+    description: 'If-else statements, relational operators, ternary logic',
+    questionCount: 3,
+    solvedCount: 1,
+    totalMarks: 30,
+    marksObtained: 10,
+    locked: false,
+    status: 'IN_PROGRESS',
+  },
+  {
+    id: 13,
+    topicId: 13,
+    assignmentId: 1,
+    sectionNumber: 3,
+    title: 'Loops & Iterations',
+    description: 'For loops, while loops, accumulator patterns',
+    questionCount: 3,
+    solvedCount: 0,
+    totalMarks: 30,
+    marksObtained: 0,
+    locked: false,
+    status: 'NOT_STARTED',
+  },
+  {
+    id: 14,
+    topicId: 14,
+    assignmentId: 1,
+    sectionNumber: 4,
+    title: 'Array Traversal',
+    description: '1D array manipulation, element searching, extrema finding',
+    questionCount: 3,
+    solvedCount: 0,
+    totalMarks: 30,
+    marksObtained: 0,
+    locked: false,
+    status: 'NOT_STARTED',
+  },
+  {
+    id: 15,
+    topicId: 14,
+    assignmentId: 1,
+    sectionNumber: 5,
+    title: 'Sub-array',
+    description: 'Sub-array slices, sliding windows, subarray sums',
+    questionCount: 1,
+    solvedCount: 0,
+    totalMarks: 10,
+    marksObtained: 0,
+    locked: false,
+    status: 'NOT_STARTED',
+  },
+  {
+    id: 16,
+    topicId: 14,
     assignmentId: 1,
     sectionNumber: 6,
     title: 'Multiple Array (2D Matrix)',
@@ -1003,7 +1117,9 @@ class Solution {
     if (sections.length === 0) return;
 
     const existingTopicsByTitle = new Map<string, Topic>();
-    this.topics.forEach((t) => existingTopicsByTitle.set(t.title.toLowerCase().trim(), t));
+    this.topics
+      .filter((t) => t.assignmentId === assignmentId)
+      .forEach((t) => existingTopicsByTitle.set(t.title.toLowerCase().trim(), t));
 
     sections.forEach((sec: any) => {
       const topicName = (sec.topicName || 'Programming').trim();
@@ -1013,18 +1129,18 @@ class Solution {
         const newTopicId = Date.now() + Math.floor(Math.random() * 1000);
         topic = {
           id: newTopicId,
-          assignmentId: sec.assignmentId || assignmentId,
+          assignmentId: assignmentId,
           title: topicName,
           description: `Topic covering ${topicName}`,
-          orderIndex: this.topics.length + 1,
+          orderIndex: this.topics.filter((t) => t.assignmentId === assignmentId).length + 1,
         };
         this.topics.push(topic);
         existingTopicsByTitle.set(topicName.toLowerCase(), topic);
       }
 
-      // Match subtopic by title first
+      // Match subtopic under this assignment by title first
       let subTopic = this.subTopics.find(
-        (st) => st.title.trim().toLowerCase() === sec.title.trim().toLowerCase()
+        (st) => st.assignmentId === assignmentId && st.title.trim().toLowerCase() === sec.title.trim().toLowerCase()
       );
 
       // Or match by ID if this subtopic was already assigned sec.id
@@ -1036,8 +1152,8 @@ class Solution {
         subTopic = {
           id: sec.id,
           topicId: topic.id,
-          assignmentId: sec.assignmentId || assignmentId,
-          sectionNumber: sec.sectionNumber || this.subTopics.length + 1,
+          assignmentId: assignmentId,
+          sectionNumber: sec.sectionNumber || this.subTopics.filter((s) => s.assignmentId === assignmentId).length + 1,
           title: sec.title,
           description: sec.description || '',
           questionCount: sec.questionCount || 0,
@@ -1051,6 +1167,7 @@ class Solution {
       } else {
         const oldId = subTopic.id;
         subTopic.id = sec.id;
+        subTopic.assignmentId = assignmentId;
         subTopic.topicId = topic.id;
         if (sec.title) subTopic.title = sec.title;
         if (sec.description) subTopic.description = sec.description;
@@ -1068,7 +1185,7 @@ class Solution {
       if (Array.isArray(sec.questions)) {
         sec.questions.forEach((q: any) => {
           let existingQ = this.questions.find(
-            (x) => x.id === q.id || x.title.trim().toLowerCase() === q.title.trim().toLowerCase()
+            (x) => x.id === q.id || (x.title.trim().toLowerCase() === q.title.trim().toLowerCase() && x.subTopicId === subTopic!.id)
           );
 
           const rawTestCases = Array.isArray(q.testCases) && q.testCases.length > 0 ? q.testCases : null;
@@ -1129,7 +1246,7 @@ class Solution {
 
   public async fetchFromBackend(assignmentId: number = 1): Promise<void> {
     try {
-      const res = await api.get(`/assignments/${assignmentId}`);
+      const res = await api.get(`/assignments/${assignmentId}`, { skipCache: true } as any);
       if (res.data?.data) {
         this.syncWithBackend(assignmentId, res.data.data);
       }
