@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import confetti from 'canvas-confetti';
 import {
   ArrowLeft,
   Lock,
@@ -17,17 +18,23 @@ import {
   Sparkles,
   Plus,
   FolderPlus,
-  Layers
+  Layers,
+  ChevronDown,
+  ChevronRight,
+  Upload,
+  BookOpen
 } from 'lucide-react';
 import api from '../api/client';
 import { AssignmentDetail, QuestionDetail } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import {
   assignmentStore,
+  Topic,
   SubTopic,
   AssignmentQuestion,
 } from '../services/assignmentStore';
 import { AddQuestionModal } from '../components/assignment/AddQuestionModal';
+import { AiPdfImportModal } from '../components/assignment/AiPdfImportModal';
 
 export const AssignmentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,7 +44,10 @@ export const AssignmentDetailPage: React.FC = () => {
   const [assignment, setAssignment] = useState<AssignmentDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Sub-topics & Questions state from assignmentStore
+  // Topics and SubTopics State from assignmentStore
+  const [topics, setTopics] = useState<Topic[]>(() =>
+    assignmentStore.getTopics(assignmentIdNum)
+  );
   const [subTopics, setSubTopics] = useState<SubTopic[]>(() =>
     assignmentStore.getSubTopics(assignmentIdNum)
   );
@@ -45,21 +55,36 @@ export const AssignmentDetailPage: React.FC = () => {
     subTopics[0]?.id || 1
   );
 
+  // Expandable Topics state (set of expanded topic IDs)
+  const [expandedTopicIds, setExpandedTopicIds] = useState<Set<number>>(() => {
+    return new Set(topics.map((t) => t.id));
+  });
+
   // Modal States
   const [isAddQuestionModalOpen, setIsAddQuestionModalOpen] = useState(false);
+  const [isAiPdfImportModalOpen, setIsAiPdfImportModalOpen] = useState(false);
+
+  // Quick Inline Creation Modals
+  const [isNewTopicPromptOpen, setIsNewTopicPromptOpen] = useState(false);
+  const [newTopicTitle, setNewTopicTitle] = useState('');
+  const [newTopicDesc, setNewTopicDesc] = useState('');
+
   const [isNewSubTopicPromptOpen, setIsNewSubTopicPromptOpen] = useState(false);
   const [newSubTopicTitle, setNewSubTopicTitle] = useState('');
   const [newSubTopicDesc, setNewSubTopicDesc] = useState('');
+  const [targetTopicIdForSubTopic, setTargetTopicIdForSubTopic] = useState<number>(
+    topics[0]?.id || 1
+  );
 
-  // MCQ Question Solving Modal State (if MCQ questions exist)
-  const [activeMcqModal, setActiveMcqModal] = useState<QuestionDetail | null>(null);
-  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
-  const [submittingMcq, setSubmittingMcq] = useState(false);
-  const [mcqFeedback, setMcqFeedback] = useState<{ correct: boolean; explanation: string } | null>(null);
+  // Banner message for successful import
+  const [importNotification, setImportNotification] = useState<string | null>(null);
 
   const refreshHierarchy = () => {
+    const freshTopics = assignmentStore.getTopics(assignmentIdNum);
     const freshSubTopics = assignmentStore.getSubTopics(assignmentIdNum);
+    setTopics([...freshTopics]);
     setSubTopics([...freshSubTopics]);
+
     if (freshSubTopics.length > 0 && !freshSubTopics.some((st) => st.id === selectedSectionId)) {
       setSelectedSectionId(freshSubTopics[0].id);
     }
@@ -72,7 +97,7 @@ export const AssignmentDetailPage: React.FC = () => {
         const data = res.data.data;
         setAssignment(data);
       })
-      .catch((err) => console.warn('Backend assignment fetch warning:', err))
+      .catch((err) => console.warn('Backend assignment fetch notice:', err))
       .finally(() => setLoading(false));
   };
 
@@ -81,17 +106,46 @@ export const AssignmentDetailPage: React.FC = () => {
     refreshHierarchy();
   }, [id]);
 
+  const toggleTopicExpand = (topicId: number) => {
+    setExpandedTopicIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(topicId)) {
+        next.delete(topicId);
+      } else {
+        next.add(topicId);
+      }
+      return next;
+    });
+  };
+
   const handleToggleBookmark = (qId: number) => {
     assignmentStore.toggleBookmark(qId);
     refreshHierarchy();
   };
 
+  const handleCreateTopic = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTopicTitle.trim()) return;
+    const created = assignmentStore.addTopic(newTopicTitle.trim(), newTopicDesc.trim(), assignmentIdNum);
+    refreshHierarchy();
+    setExpandedTopicIds((prev) => new Set([...prev, created.id]));
+    setNewTopicTitle('');
+    setNewTopicDesc('');
+    setIsNewTopicPromptOpen(false);
+  };
+
   const handleCreateSubTopic = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubTopicTitle.trim()) return;
-    const created = assignmentStore.addSubTopic(newSubTopicTitle, newSubTopicDesc, assignmentIdNum);
+    const created = assignmentStore.addSubTopic(
+      newSubTopicTitle.trim(),
+      newSubTopicDesc.trim(),
+      assignmentIdNum,
+      targetTopicIdForSubTopic
+    );
     refreshHierarchy();
     setSelectedSectionId(created.id);
+    setExpandedTopicIds((prev) => new Set([...prev, targetTopicIdForSubTopic]));
     setNewSubTopicTitle('');
     setNewSubTopicDesc('');
     setIsNewSubTopicPromptOpen(false);
@@ -105,6 +159,7 @@ export const AssignmentDetailPage: React.FC = () => {
   const currentSection =
     subTopics.find((s) => s.id === selectedSectionId) || subTopics[0] || {
       id: 1,
+      topicId: 1,
       assignmentId: assignmentIdNum,
       sectionNumber: 1,
       title: 'Data Types',
@@ -117,12 +172,13 @@ export const AssignmentDetailPage: React.FC = () => {
       status: 'NOT_STARTED' as const,
     };
 
+  const currentParentTopic = topics.find((t) => t.id === currentSection.topicId);
   const currentQuestions = assignmentStore.getQuestionsBySubTopic(currentSection.id);
 
-  // Metrics calculations
-  const totalModules = subTopics.length;
-  const completedModules = subTopics.filter((s) => s.status === 'COMPLETED').length;
-  const modulesPct = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
+  // Overall metric calculations
+  const totalSubTopics = subTopics.length;
+  const completedSubTopics = subTopics.filter((s) => s.status === 'COMPLETED').length;
+  const modulesPct = totalSubTopics > 0 ? Math.round((completedSubTopics / totalSubTopics) * 100) : 0;
 
   const totalQuestions = subTopics.reduce((acc, s) => acc + s.questionCount, 0);
   const totalSolved = subTopics.reduce((acc, s) => acc + s.solvedCount, 0);
@@ -137,8 +193,8 @@ export const AssignmentDetailPage: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Top Breadcrumb */}
-      <div className="flex items-center justify-between">
+      {/* Top Breadcrumb & Quick Actions Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <Link
           to="/assignments"
           className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
@@ -147,21 +203,41 @@ export const AssignmentDetailPage: React.FC = () => {
           <span>Back to Assignments</span>
         </Link>
 
-        {/* Quick Admin Actions */}
-        <div className="flex items-center gap-2">
+        {/* Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => setIsNewSubTopicPromptOpen(true)}
+            onClick={() => setIsNewTopicPromptOpen(true)}
             className="px-3 py-1.5 rounded-xl bg-[#141822] hover:bg-[#1c2232] border border-[#232c40] text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-colors"
           >
-            <FolderPlus className="w-3.5 h-3.5 text-[#00c2ff]" />
-            <span>+ New Sub-Topic</span>
+            <Layers className="w-3.5 h-3.5 text-[#00c2ff]" />
+            <span>+ Add Topic</span>
           </button>
+
+          <button
+            onClick={() => {
+              setTargetTopicIdForSubTopic(currentSection.topicId || topics[0]?.id || 1);
+              setIsNewSubTopicPromptOpen(true);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-[#141822] hover:bg-[#1c2232] border border-[#232c40] text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          >
+            <FolderPlus className="w-3.5 h-3.5 text-emerald-400" />
+            <span>+ Add Sub-Topic</span>
+          </button>
+
+          <button
+            onClick={() => setIsAiPdfImportModalOpen(true)}
+            className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-[#00c2ff] to-[#38bdf8] hover:from-[#38bdf8] hover:to-[#00c2ff] text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>✨ AI Import from PDF / Text</span>
+          </button>
+
           <button
             onClick={() => setIsAddQuestionModalOpen(true)}
-            className="px-3.5 py-1.5 rounded-xl bg-[#00c2ff] hover:bg-[#38bdf8] text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-cyan-500/20"
+            className="px-3 py-1.5 rounded-xl bg-[#181f2c] hover:bg-[#222c3e] border border-[#2e3b52] text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>+ Add Question</span>
+            <span>Manual Add</span>
           </button>
         </div>
       </div>
@@ -176,21 +252,37 @@ export const AssignmentDetailPage: React.FC = () => {
         </div>
         <p className="text-xs text-slate-400 max-w-4xl">
           {assignment?.description ||
-            'Master core Java concepts with hands-on coding challenges evaluated by an automated OpenJDK 21 online compiler.'}
+            'Hierarchical coding module: Topics (Data Types, Arrays, Loops) containing Sub-topics with automated OpenJDK 21 execution.'}
         </p>
       </div>
 
+      {/* Success Notification Banner */}
+      {importNotification && (
+        <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 text-xs font-semibold flex items-center justify-between animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span>{importNotification}</span>
+          </div>
+          <button
+            onClick={() => setImportNotification(null)}
+            className="text-emerald-400 hover:text-white"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* 4 Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1: Modules */}
+        {/* Metric 1: Modules / Sub-topics */}
         <div className="bg-[#0c0e12] border border-[#1f2430] rounded-2xl p-4 flex flex-col justify-between shadow-lg">
           <div>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400 font-medium">Modules</span>
+              <span className="text-slate-400 font-medium">Sub-Topics</span>
               <span className="text-[#00c2ff] font-bold">{modulesPct}%</span>
             </div>
-            <div className="text-2xl font-black text-white mt-1">{totalModules}</div>
-            <div className="text-xs text-slate-500 mt-0.5">{completedModules} completed</div>
+            <div className="text-2xl font-black text-white mt-1">{totalSubTopics}</div>
+            <div className="text-xs text-slate-500 mt-0.5">across {topics.length} topics ({completedSubTopics} completed)</div>
           </div>
           <div className="h-1 w-full bg-[#181c26] rounded-full overflow-hidden mt-4">
             <div
@@ -236,19 +328,15 @@ export const AssignmentDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Metric 4: Marks Obtained */}
+        {/* Metric 4: Marks */}
         <div className="bg-[#0c0e12] border border-[#1f2430] rounded-2xl p-4 flex flex-col justify-between shadow-lg">
           <div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-400 font-medium">Marks obtained</span>
               <span className="text-cyan-400 font-bold">{marksPct}%</span>
             </div>
-            <div className="text-2xl font-black text-white mt-1">
-              {marksObtained}
-            </div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              / {totalMarks} total marks
-            </div>
+            <div className="text-2xl font-black text-white mt-1">{marksObtained}</div>
+            <div className="text-xs text-slate-500 mt-0.5">/ {totalMarks} total marks</div>
           </div>
           <div className="h-1 w-full bg-[#181c26] rounded-full overflow-hidden mt-4">
             <div
@@ -259,92 +347,168 @@ export const AssignmentDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Two-Column Split: Modules Sidebar (Left) + Questions List (Right) */}
+      {/* Two-Column Split: Topics & Sub-Topics Tree (Left) + Questions List (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Sub-Topics Navigation */}
-        <div className="lg:col-span-4 bg-[#0c0e12] border border-[#1f2430] rounded-2xl p-4 shadow-xl">
-          <div className="flex items-center justify-between pb-3 mb-2 border-b border-[#1a1f2c]">
+        {/* Left Column: Topics & Sub-Topics Tree */}
+        <div className="lg:col-span-4 bg-[#0c0e12] border border-[#1f2430] rounded-2xl p-4 shadow-xl space-y-3">
+          <div className="flex items-center justify-between pb-3 border-b border-[#1a1f2c]">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-white">Sub-Topics</span>
+              <span className="font-bold text-sm text-white">Topics & Modules</span>
               <span className="text-[10px] bg-[#181c26] text-slate-400 font-bold px-1.5 py-0.5 rounded-md">
-                {subTopics.length}
+                {topics.length} Topics
               </span>
             </div>
-            <div className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              <span>{completedModules} completed</span>
-            </div>
+            <button
+              onClick={() => setIsNewTopicPromptOpen(true)}
+              className="text-xs text-[#00c2ff] hover:underline font-bold"
+            >
+              + Topic
+            </button>
           </div>
 
-          <div className="space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
-            {subTopics.map((sec, idx) => {
-              const isSelected = sec.id === currentSection.id;
-              const isCompleted = sec.status === 'COMPLETED';
+          {/* Grouped Tree List */}
+          <div className="space-y-3 max-h-[640px] overflow-y-auto pr-1">
+            {topics.map((topic) => {
+              const topicSubTopics = subTopics.filter((st) => st.topicId === topic.id);
+              const isExpanded = expandedTopicIds.has(topic.id);
+              const topicTotalQ = topicSubTopics.reduce((acc, st) => acc + st.questionCount, 0);
+              const topicSolvedQ = topicSubTopics.reduce((acc, st) => acc + st.solvedCount, 0);
+
               return (
-                <button
-                  key={sec.id}
-                  onClick={() => setSelectedSectionId(sec.id)}
-                  className={`w-full text-left p-3 rounded-xl transition-all flex items-center justify-between border ${
-                    isSelected
-                      ? 'bg-[#141924] border-[#00c2ff]/40 shadow-sm'
-                      : 'bg-transparent hover:bg-[#12151c] border-transparent text-slate-400'
-                  }`}
+                <div
+                  key={topic.id}
+                  className="rounded-2xl border border-[#1b2230] bg-[#090b0e] overflow-hidden"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                        isCompleted
-                          ? 'bg-emerald-500/20 text-emerald-400'
-                          : isSelected
-                          ? 'bg-[#00c2ff]/20 text-[#00c2ff]'
-                          : 'bg-[#181c26] text-slate-400'
-                      }`}
-                    >
-                      {isCompleted ? '✓' : idx + 1}
+                  {/* Topic Group Header */}
+                  <div
+                    onClick={() => toggleTopicExpand(topic.id)}
+                    className="p-3 bg-[#11151e] hover:bg-[#151b27] cursor-pointer flex items-center justify-between transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="text-slate-400">
+                        {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      </div>
+                      <span className="font-bold text-xs text-white truncate">{topic.title}</span>
                     </div>
-                    <span
-                      className={`text-xs font-medium truncate ${
-                        isSelected ? 'text-white font-semibold' : 'text-slate-300'
-                      }`}
-                    >
-                      {sec.title}
-                    </span>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] text-slate-400 bg-[#192130] px-2 py-0.5 rounded-full font-mono">
+                        {topicSolvedQ}/{topicTotalQ} Qs
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTargetTopicIdForSubTopic(topic.id);
+                          setIsNewSubTopicPromptOpen(true);
+                        }}
+                        className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold px-1"
+                        title="Add sub-topic to this topic"
+                      >
+                        + Sub
+                      </button>
+                    </div>
                   </div>
 
-                  <span className="text-xs text-slate-400 font-medium shrink-0 ml-2">
-                    <strong className={isCompleted ? 'text-emerald-400' : 'text-slate-300'}>
-                      {sec.solvedCount}
-                    </strong>
-                    /{sec.questionCount}
-                  </span>
-                </button>
+                  {/* Sub-Topics under this topic */}
+                  {isExpanded && (
+                    <div className="p-1.5 space-y-1 bg-[#090c10]">
+                      {topicSubTopics.length === 0 ? (
+                        <div className="py-3 px-3 text-center text-[11px] text-slate-500">
+                          No sub-topics yet.{' '}
+                          <button
+                            onClick={() => {
+                              setTargetTopicIdForSubTopic(topic.id);
+                              setIsNewSubTopicPromptOpen(true);
+                            }}
+                            className="text-[#00c2ff] underline font-semibold ml-1"
+                          >
+                            Add one
+                          </button>
+                        </div>
+                      ) : (
+                        topicSubTopics.map((st) => {
+                          const isSelected = st.id === currentSection.id;
+                          const isCompleted = st.status === 'COMPLETED';
+
+                          return (
+                            <button
+                              key={st.id}
+                              onClick={() => setSelectedSectionId(st.id)}
+                              className={`w-full text-left p-2.5 rounded-xl transition-all flex items-center justify-between border ${
+                                isSelected
+                                  ? 'bg-[#151d2c] border-[#00c2ff]/40 shadow-sm text-white'
+                                  : 'bg-transparent hover:bg-[#121620] border-transparent text-slate-400'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div
+                                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                                    isCompleted
+                                      ? 'bg-emerald-500/20 text-emerald-400'
+                                      : isSelected
+                                      ? 'bg-[#00c2ff]/20 text-[#00c2ff]'
+                                      : 'bg-[#181c26] text-slate-400'
+                                  }`}
+                                >
+                                  {isCompleted ? '✓' : '•'}
+                                </div>
+                                <span className={`text-xs truncate ${isSelected ? 'font-bold text-white' : 'font-medium'}`}>
+                                  {st.title}
+                                </span>
+                              </div>
+
+                              <span className="text-[11px] text-slate-400 font-mono shrink-0 ml-2">
+                                <strong className={isCompleted ? 'text-emerald-400' : 'text-slate-300'}>
+                                  {st.solvedCount}
+                                </strong>
+                                /{st.questionCount}
+                              </span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
 
-          {/* Add Subtopic inline button */}
-          <div className="pt-3 mt-3 border-t border-[#1a1f2c]">
+          {/* Quick Bottom Actions */}
+          <div className="pt-2 border-t border-[#1a1f2c] flex gap-2">
             <button
-              onClick={() => setIsNewSubTopicPromptOpen(true)}
-              className="w-full py-2 px-3 rounded-xl bg-[#141822] hover:bg-[#1a202e] border border-dashed border-[#263147] hover:border-[#00c2ff]/50 text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+              onClick={() => setIsNewTopicPromptOpen(true)}
+              className="flex-1 py-2 px-3 rounded-xl bg-[#141822] hover:bg-[#1a202e] border border-dashed border-[#263147] hover:border-[#00c2ff]/50 text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
             >
-              <FolderPlus className="w-3.5 h-3.5 text-[#00c2ff]" />
-              <span>+ Add New Sub-Topic</span>
+              <Layers className="w-3.5 h-3.5 text-[#00c2ff]" />
+              <span>+ Add Topic</span>
+            </button>
+            <button
+              onClick={() => {
+                setTargetTopicIdForSubTopic(currentSection.topicId || topics[0]?.id || 1);
+                setIsNewSubTopicPromptOpen(true);
+              }}
+              className="flex-1 py-2 px-3 rounded-xl bg-[#141822] hover:bg-[#1a202e] border border-dashed border-[#263147] hover:border-emerald-500/50 text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+            >
+              <FolderPlus className="w-3.5 h-3.5 text-emerald-400" />
+              <span>+ Sub-Topic</span>
             </button>
           </div>
         </div>
 
-        {/* Right Column: Questions List for selected Sub-Topic */}
+        {/* Right Column: Questions in active Sub-Topic */}
         <div className="lg:col-span-8 bg-[#0c0e12] border border-[#1f2430] rounded-2xl p-5 shadow-xl">
           {/* Header of Right Pane */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-4 border-b border-[#1a1f2c]">
             <div>
-              <div className="flex items-center gap-2.5">
-                <h3 className="font-bold text-base text-white">
-                  {currentSection.sectionNumber || 1} · {currentSection.title}
-                </h3>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-sky-400 uppercase tracking-wider">
+                  {currentParentTopic?.title || 'Topic'} &gt;
+                </span>
+                <h3 className="font-extrabold text-base text-white">{currentSection.title}</h3>
                 {currentSection.status === 'COMPLETED' && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 flex items-center gap-1">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
                     ✓ Completed
                   </span>
                 )}
@@ -355,10 +519,18 @@ export const AssignmentDetailPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsAiPdfImportModalOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#00c2ff] to-[#38bdf8] hover:from-[#38bdf8] hover:to-[#00c2ff] text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>AI Import from PDF</span>
+              </button>
+
               <button
                 onClick={() => setIsAddQuestionModalOpen(true)}
-                className="px-3.5 py-1.5 rounded-xl bg-[#00c2ff] hover:bg-[#38bdf8] text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-cyan-500/20"
+                className="px-3.5 py-1.5 rounded-xl bg-[#181f2c] hover:bg-[#222c3e] border border-[#2e3b52] text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Question</span>
@@ -378,21 +550,29 @@ export const AssignmentDetailPage: React.FC = () => {
               </p>
             </div>
           ) : currentQuestions.length === 0 ? (
-            <div className="p-12 text-center flex flex-col items-center justify-center bg-[#090b0e] rounded-xl border border-dashed border-[#1f2430]">
-              <div className="w-12 h-12 rounded-2xl bg-[#141822] text-[#00c2ff] flex items-center justify-center mb-3">
-                <Code2 className="w-6 h-6" />
+            <div className="p-12 text-center flex flex-col items-center justify-center bg-[#090b0e] rounded-2xl border border-dashed border-[#1f2430]">
+              <div className="w-14 h-14 rounded-3xl bg-gradient-to-tr from-[#00c2ff]/10 to-sky-400/10 text-[#00c2ff] border border-[#00c2ff]/20 flex items-center justify-center mb-3">
+                <Sparkles className="w-7 h-7" />
               </div>
-              <h4 className="text-sm font-bold text-white">No questions in this sub-topic yet</h4>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm mb-4">
-                Be the first to add a Java coding question with automated test cases to this topic!
+              <h4 className="text-base font-extrabold text-white">No questions in "{currentSection.title}" yet</h4>
+              <p className="text-xs text-slate-400 mt-1 max-w-md mb-5 leading-relaxed">
+                Add one or multiple questions automatically by uploading your PDF question sheet or paste document!
               </p>
-              <button
-                onClick={() => setIsAddQuestionModalOpen(true)}
-                className="px-4 py-2 rounded-xl bg-[#00c2ff] text-slate-950 text-xs font-bold flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add First Question</span>
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsAiPdfImportModalOpen(true)}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#00c2ff] to-[#38bdf8] text-slate-950 text-xs font-bold flex items-center gap-2 shadow-lg shadow-cyan-500/20 hover:opacity-95 transition-all"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>✨ Upload PDF (AI Auto-Fill)</span>
+                </button>
+                <button
+                  onClick={() => setIsAddQuestionModalOpen(true)}
+                  className="px-4 py-2.5 rounded-xl bg-[#141822] border border-[#232d3f] text-slate-200 text-xs font-semibold hover:bg-[#1a202c] transition-all"
+                >
+                  + Add Manually
+                </button>
+              </div>
             </div>
           ) : (
             /* Questions List */
@@ -411,7 +591,7 @@ export const AssignmentDetailPage: React.FC = () => {
                     key={q.id}
                     className="p-3.5 rounded-xl bg-[#090b0e] hover:bg-[#12151c] border border-[#1a1f2c] transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
                   >
-                    {/* Left: Solved circle + Title + Badges */}
+                    {/* Left: Solved indicator + Title + Badges */}
                     <div className="flex items-start sm:items-center gap-3 min-w-0">
                       <div
                         className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5 sm:mt-0 ${
@@ -492,7 +672,32 @@ export const AssignmentDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal: Add Question */}
+      {/* Modal: AI PDF / Text Importer */}
+      {isAiPdfImportModalOpen && (
+        <AiPdfImportModal
+          topics={topics}
+          subTopics={subTopics}
+          activeSubTopicId={selectedSectionId}
+          assignmentId={assignmentIdNum}
+          onClose={() => setIsAiPdfImportModalOpen(false)}
+          onQuestionsImported={(count, targetSubId) => {
+            refreshHierarchy();
+            setSelectedSectionId(targetSubId);
+            setImportNotification(`Successfully imported ${count} questions with automated test cases!`);
+            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+          }}
+          onTopicAdded={(newT) => {
+            refreshHierarchy();
+            setExpandedTopicIds((prev) => new Set([...prev, newT.id]));
+          }}
+          onSubTopicAdded={(newSt) => {
+            refreshHierarchy();
+            setSelectedSectionId(newSt.id);
+          }}
+        />
+      )}
+
+      {/* Modal: Manual Add Question */}
       {isAddQuestionModalOpen && (
         <AddQuestionModal
           subTopics={subTopics}
@@ -510,13 +715,78 @@ export const AssignmentDetailPage: React.FC = () => {
         />
       )}
 
-      {/* Quick Modal: Add Sub-Topic */}
+      {/* Inline Modal: Create New Topic */}
+      {isNewTopicPromptOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0c0e12] rounded-2xl max-w-md w-full border border-[#1f2430] p-6 shadow-2xl animate-in fade-in zoom-in-95 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#1a1f2c]">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-[#00c2ff]" />
+                <h3 className="font-bold text-sm text-white">Create New Topic</h3>
+              </div>
+              <button
+                onClick={() => setIsNewTopicPromptOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTopic} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  Topic Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Array, Strings, Recursion, Bit Manipulation"
+                  value={newTopicTitle}
+                  onChange={(e) => setNewTopicTitle(e.target.value)}
+                  className="w-full bg-[#121620] border border-[#222b3d] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00c2ff]"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  Description (optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Multi-dimensional arrays, subarray operations"
+                  value={newTopicDesc}
+                  onChange={(e) => setNewTopicDesc(e.target.value)}
+                  className="w-full bg-[#121620] border border-[#222b3d] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00c2ff]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsNewTopicPromptOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[#00c2ff] hover:bg-[#38bdf8] text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20"
+                >
+                  Create Topic
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Inline Modal: Create New Sub-Topic */}
       {isNewSubTopicPromptOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#0c0e12] rounded-2xl max-w-md w-full border border-[#1f2430] p-6 shadow-2xl animate-in fade-in zoom-in-95 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[#1a1f2c]">
               <div className="flex items-center gap-2">
-                <FolderPlus className="w-4 h-4 text-[#00c2ff]" />
+                <FolderPlus className="w-4 h-4 text-emerald-400" />
                 <h3 className="font-bold text-sm text-white">Create New Sub-Topic</h3>
               </div>
               <button
@@ -530,12 +800,29 @@ export const AssignmentDetailPage: React.FC = () => {
             <form onSubmit={handleCreateSubTopic} className="space-y-3">
               <div>
                 <label className="text-xs font-bold text-slate-300 block mb-1">
+                  Parent Topic *
+                </label>
+                <select
+                  value={targetTopicIdForSubTopic}
+                  onChange={(e) => setTargetTopicIdForSubTopic(Number(e.target.value))}
+                  className="w-full bg-[#121620] border border-[#222b3d] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00c2ff]"
+                >
+                  {topics.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
                   Sub-Topic Title *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. String Manipulation, Bitwise Algorithms"
+                  placeholder="e.g. Sub-array, Multiple Array (2D), Two Pointers"
                   value={newSubTopicTitle}
                   onChange={(e) => setNewSubTopicTitle(e.target.value)}
                   className="w-full bg-[#121620] border border-[#222b3d] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00c2ff]"
@@ -548,7 +835,7 @@ export const AssignmentDetailPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. String methods, palindrome, anagram questions"
+                  placeholder="e.g. Contiguous slices, Kadane's algorithm, prefix sums"
                   value={newSubTopicDesc}
                   onChange={(e) => setNewSubTopicDesc(e.target.value)}
                   className="w-full bg-[#121620] border border-[#222b3d] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00c2ff]"

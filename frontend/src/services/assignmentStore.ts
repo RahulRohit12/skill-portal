@@ -1,4 +1,4 @@
-// Assignment & Question Store with Persistent Hierarchy (Sub-topics, Coding Questions, Test Cases)
+// Assignment & Question Store with Persistent Hierarchy (Topics, Sub-topics, Coding Questions, Test Cases)
 
 export interface TestCase {
   id: number;
@@ -25,8 +25,17 @@ export interface AssignmentQuestion {
   bookmarked: boolean;
 }
 
+export interface Topic {
+  id: number;
+  assignmentId: number;
+  title: string;
+  description: string;
+  orderIndex: number;
+}
+
 export interface SubTopic {
   id: number;
+  topicId: number;
   assignmentId: number;
   sectionNumber: number;
   title: string;
@@ -39,17 +48,51 @@ export interface SubTopic {
   status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
 }
 
-const STORAGE_KEY = 'sp_assignment_hierarchy_v2';
-const SOLVED_KEY = 'sp_solved_questions_v2';
+const STORAGE_KEY = 'sp_assignment_hierarchy_v3';
+const SOLVED_KEY = 'sp_solved_questions_v3';
 
-// Built-in Default Sub-topics for "Programming"
-const DEFAULT_SUBTOPICS: SubTopic[] = [
+// Default Topics for "Programming"
+export const DEFAULT_TOPICS: Topic[] = [
   {
     id: 1,
     assignmentId: 1,
-    sectionNumber: 1,
     title: 'Data Types',
-    description: 'Primitive and non-primitive data types, conversions, and memory limits in Java',
+    description: 'Primitive types, Scanner input, type casting, arithmetic operators',
+    orderIndex: 1,
+  },
+  {
+    id: 2,
+    assignmentId: 1,
+    title: 'If Else & Conditionals',
+    description: 'Branching decisions, logical conditions, comparison operators',
+    orderIndex: 2,
+  },
+  {
+    id: 3,
+    assignmentId: 1,
+    title: 'Loops & Iterations',
+    description: 'For loops, while loops, accumulator logic, nested iteration patterns',
+    orderIndex: 3,
+  },
+  {
+    id: 4,
+    assignmentId: 1,
+    title: 'Array',
+    description: 'Linear arrays, subarrays, multidimensional arrays, two pointers',
+    orderIndex: 4,
+  },
+];
+
+// Default Sub-topics grouped under Topics
+export const DEFAULT_SUBTOPICS: SubTopic[] = [
+  // Under Topic 1: Data Types
+  {
+    id: 1,
+    topicId: 1,
+    assignmentId: 1,
+    sectionNumber: 1,
+    title: 'Primitive Types & Scanner',
+    description: 'Variables, inputs, scanner reading, arithmetic expressions',
     questionCount: 6,
     solvedCount: 6,
     totalMarks: 60,
@@ -57,12 +100,14 @@ const DEFAULT_SUBTOPICS: SubTopic[] = [
     locked: false,
     status: 'COMPLETED',
   },
+  // Under Topic 2: If Else
   {
     id: 2,
+    topicId: 2,
     assignmentId: 1,
     sectionNumber: 2,
-    title: 'If Else & Conditionals',
-    description: 'Branch prediction, decision constructs, relational and boolean operators',
+    title: 'Conditionals & Branching',
+    description: 'If-else statements, relational operators, ternary logic',
     questionCount: 3,
     solvedCount: 1,
     totalMarks: 30,
@@ -70,12 +115,29 @@ const DEFAULT_SUBTOPICS: SubTopic[] = [
     locked: false,
     status: 'IN_PROGRESS',
   },
+  // Under Topic 3: Loops
   {
     id: 3,
+    topicId: 3,
     assignmentId: 1,
     sectionNumber: 3,
     title: 'Loops & Iterations',
-    description: 'For loops, while loops, nested iterations, and break/continue statements',
+    description: 'For loops, while loops, accumulator patterns',
+    questionCount: 3,
+    solvedCount: 0,
+    totalMarks: 30,
+    marksObtained: 0,
+    locked: false,
+    status: 'NOT_STARTED',
+  },
+  // Under Topic 4: Array
+  {
+    id: 4,
+    topicId: 4,
+    assignmentId: 1,
+    sectionNumber: 4,
+    title: 'Array Traversal',
+    description: '1D array manipulation, element searching, extrema finding',
     questionCount: 3,
     solvedCount: 0,
     totalMarks: 30,
@@ -84,14 +146,29 @@ const DEFAULT_SUBTOPICS: SubTopic[] = [
     status: 'NOT_STARTED',
   },
   {
-    id: 4,
+    id: 5,
+    topicId: 4,
     assignmentId: 1,
-    sectionNumber: 4,
-    title: 'Array Traversal',
-    description: 'Linear array traversal, bounds checking, and element transformations',
-    questionCount: 3,
+    sectionNumber: 5,
+    title: 'Sub-array',
+    description: 'Sub-array slices, sliding windows, subarray sums',
+    questionCount: 1,
     solvedCount: 0,
-    totalMarks: 30,
+    totalMarks: 10,
+    marksObtained: 0,
+    locked: false,
+    status: 'NOT_STARTED',
+  },
+  {
+    id: 6,
+    topicId: 4,
+    assignmentId: 1,
+    sectionNumber: 6,
+    title: 'Multiple Array (2D Matrix)',
+    description: 'Multi-dimensional arrays, rows, columns, and matrix traversal',
+    questionCount: 1,
+    solvedCount: 0,
+    totalMarks: 10,
     marksObtained: 0,
     locked: false,
     status: 'NOT_STARTED',
@@ -99,7 +176,7 @@ const DEFAULT_SUBTOPICS: SubTopic[] = [
 ];
 
 // Built-in Questions with Realistic Problem Statements & Real Test Cases
-const DEFAULT_QUESTIONS: AssignmentQuestion[] = [
+export const DEFAULT_QUESTIONS: AssignmentQuestion[] = [
   // --- SUB-TOPIC 1: DATA TYPES ---
   {
     id: 101,
@@ -576,10 +653,88 @@ class Solution {
     ],
     solved: false,
     bookmarked: false,
-  }
+  },
+
+  // --- SUB-TOPIC 5: SUB-ARRAY ---
+  {
+    id: 501,
+    subTopicId: 5,
+    title: 'Maximum Subarray Sum',
+    questionType: 'CODING',
+    difficulty: 'MEDIUM',
+    marks: 10,
+    description: 'Given an integer array nums, find the contiguous subarray (containing at least one number) which has the largest sum and print its sum (Kadane\'s Algorithm).',
+    inputFormat: 'First line contains integer n. Second line contains n space-separated integers.',
+    outputFormat: 'Print the maximum subarray sum.',
+    constraints: '1 <= n <= 10^5, -10^4 <= nums[i] <= 10^4',
+    starterCodeJava: `import java.util.Scanner;
+
+class Solution {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        int n = scanner.nextInt();
+        int[] nums = new int[n];
+        for (int i = 0; i < n; i++) nums[i] = scanner.nextInt();
+        
+        long maxSoFar = nums[0];
+        long currMax = nums[0];
+        for (int i = 1; i < n; i++) {
+            currMax = Math.max((long)nums[i], currMax + nums[i]);
+            maxSoFar = Math.max(maxSoFar, currMax);
+        }
+        System.out.println(maxSoFar);
+    }
+}`,
+    testCases: [
+      { id: 1, inputData: '5\n-2 1 -3 4 -1\n', expectedOutput: '4' },
+      { id: 2, inputData: '4\n1 2 3 4\n', expectedOutput: '10' },
+      { id: 3, inputData: '3\n-5 -2 -9\n', expectedOutput: '-2', isHidden: true },
+    ],
+    solved: false,
+    bookmarked: false,
+  },
+
+  // --- SUB-TOPIC 6: MULTIPLE ARRAY (2D MATRIX) ---
+  {
+    id: 601,
+    subTopicId: 6,
+    title: 'Matrix Diagonal Sum',
+    questionType: 'CODING',
+    difficulty: 'EASY',
+    marks: 10,
+    description: 'Given a square matrix of size N x N, calculate the sum of primary and secondary diagonal elements without counting the center element twice.',
+    inputFormat: 'First line: N. Next N lines: N space-separated integers each.',
+    outputFormat: 'Print total diagonal sum.',
+    constraints: '1 <= N <= 100',
+    starterCodeJava: `import java.util.Scanner;
+
+class Solution {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        int n = scanner.nextInt();
+        int sum = 0;
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                int val = scanner.nextInt();
+                if (i == j || i + j == n - 1) {
+                    sum += val;
+                }
+            }
+        }
+        System.out.println(sum);
+    }
+}`,
+    testCases: [
+      { id: 1, inputData: '3\n1 2 3\n4 5 6\n7 8 9\n', expectedOutput: '25' },
+      { id: 2, inputData: '2\n1 1\n1 1\n', expectedOutput: '4' },
+    ],
+    solved: false,
+    bookmarked: false,
+  },
 ];
 
 class AssignmentStore {
+  private topics: Topic[] = [];
   private subTopics: SubTopic[] = [];
   private questions: AssignmentQuestion[] = [];
   private solvedIds: Set<number> = new Set();
@@ -593,9 +748,11 @@ class AssignmentStore {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
+        this.topics = parsed.topics || DEFAULT_TOPICS;
         this.subTopics = parsed.subTopics || DEFAULT_SUBTOPICS;
         this.questions = parsed.questions || DEFAULT_QUESTIONS;
       } else {
+        this.topics = DEFAULT_TOPICS;
         this.subTopics = DEFAULT_SUBTOPICS;
         this.questions = DEFAULT_QUESTIONS;
         this.save();
@@ -609,6 +766,7 @@ class AssignmentStore {
         this.solvedIds = new Set([101, 102, 103, 104, 105, 106, 201]);
       }
     } catch {
+      this.topics = DEFAULT_TOPICS;
       this.subTopics = DEFAULT_SUBTOPICS;
       this.questions = DEFAULT_QUESTIONS;
       this.solvedIds = new Set([101, 102, 103, 104, 105, 106, 201]);
@@ -620,7 +778,11 @@ class AssignmentStore {
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ subTopics: this.subTopics, questions: this.questions })
+        JSON.stringify({
+          topics: this.topics,
+          subTopics: this.subTopics,
+          questions: this.questions,
+        })
       );
       localStorage.setItem(SOLVED_KEY, JSON.stringify(Array.from(this.solvedIds)));
     } catch {}
@@ -649,8 +811,16 @@ class AssignmentStore {
     });
   }
 
+  public getTopics(assignmentId: number = 1): Topic[] {
+    return this.topics.filter((t) => t.assignmentId === assignmentId);
+  }
+
   public getSubTopics(assignmentId: number = 1): SubTopic[] {
     return this.subTopics.filter((st) => st.assignmentId === assignmentId);
+  }
+
+  public getSubTopicsByTopic(topicId: number): SubTopic[] {
+    return this.subTopics.filter((st) => st.topicId === topicId);
   }
 
   public getQuestionsBySubTopic(subTopicId: number): AssignmentQuestion[] {
@@ -671,15 +841,37 @@ class AssignmentStore {
     };
   }
 
-  public addSubTopic(title: string, description: string, assignmentId: number = 1): SubTopic {
+  public addTopic(title: string, description: string = '', assignmentId: number = 1): Topic {
+    const newId = Date.now();
+    const newTopic: Topic = {
+      id: newId,
+      assignmentId,
+      title: title.trim(),
+      description: description.trim() || `Topic covering ${title}`,
+      orderIndex: this.topics.length + 1,
+    };
+    this.topics.push(newTopic);
+    this.save();
+    return newTopic;
+  }
+
+  public addSubTopic(
+    title: string,
+    description: string = '',
+    assignmentId: number = 1,
+    topicId?: number
+  ): SubTopic {
     const newId = Date.now();
     const nextNumber = this.subTopics.length + 1;
+    const targetTopicId = topicId || (this.topics[0]?.id || 1);
+
     const newSubTopic: SubTopic = {
       id: newId,
+      topicId: targetTopicId,
       assignmentId,
       sectionNumber: nextNumber,
       title: title.trim(),
-      description: description.trim() || `Practice exercises on ${title}`,
+      description: description.trim() || `Exercises on ${title}`,
       questionCount: 0,
       solvedCount: 0,
       totalMarks: 0,
@@ -740,6 +932,25 @@ class Solution {
     this.recalculateCounts();
     this.save();
     return newQuestion;
+  }
+
+  public addMultipleQuestions(questions: Array<{
+    subTopicId: number;
+    title: string;
+    difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+    marks: number;
+    description: string;
+    inputFormat?: string;
+    outputFormat?: string;
+    constraints?: string;
+    starterCodeJava?: string;
+    testCases: TestCase[];
+  }>): AssignmentQuestion[] {
+    const created: AssignmentQuestion[] = [];
+    for (const q of questions) {
+      created.push(this.addQuestion(q));
+    }
+    return created;
   }
 
   public markSolved(questionId: number) {
