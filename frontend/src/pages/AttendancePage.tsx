@@ -13,7 +13,6 @@ import api from '../api/client';
 import { AttendanceData } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { AttendanceCalendar } from '../components/attendance/AttendanceCalendar';
-import { AttendanceMatrix } from '../components/attendance/AttendanceMatrix';
 import { StudentQrModal } from '../components/attendance/StudentQrModal';
 
 export const AttendancePage: React.FC = () => {
@@ -87,9 +86,6 @@ export const AttendancePage: React.FC = () => {
           <span className="text-[11px] text-slate-400 font-medium">Missed Sessions</span>
         </div>
       </div>
-
-      {/* Real Live Attendance Timeline Matrix matching reference */}
-      <AttendanceMatrix onOpenQrModal={() => setShowQrModal(true)} />
 
       {/* Interactive Monthly Attendance Calendar */}
       <AttendanceCalendar />
