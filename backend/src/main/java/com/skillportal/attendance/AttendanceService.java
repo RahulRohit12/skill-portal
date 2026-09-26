@@ -1,5 +1,6 @@
 package com.skillportal.attendance;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ public class AttendanceService {
     private final com.skillportal.notification.NotificationRepository notificationRepository;
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("hh:mm a");
 
+    @Autowired
     public AttendanceService(
             AttendanceRepository attendanceRepository,
             com.skillportal.email.EmailService emailService,
@@ -26,10 +28,6 @@ public class AttendanceService {
         this.attendanceRepository = attendanceRepository;
         this.emailService = emailService;
         this.notificationRepository = notificationRepository;
-    }
-
-    public AttendanceService(AttendanceRepository attendanceRepository) {
-        this(attendanceRepository, null, null);
     }
 
     public AttendanceDto.StudentAttendanceSummary getStudentAttendance(Long userId) {
