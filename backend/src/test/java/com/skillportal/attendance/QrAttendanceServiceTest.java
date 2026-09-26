@@ -14,12 +14,16 @@ import static org.mockito.Mockito.*;
 class QrAttendanceServiceTest {
 
     private AttendanceRepository attendanceRepository;
+    private com.skillportal.email.EmailService emailService;
+    private com.skillportal.notification.NotificationRepository notificationRepository;
     private AttendanceService attendanceService;
 
     @BeforeEach
     void setUp() {
         attendanceRepository = mock(AttendanceRepository.class);
-        attendanceService = new AttendanceService(attendanceRepository);
+        emailService = mock(com.skillportal.email.EmailService.class);
+        notificationRepository = mock(com.skillportal.notification.NotificationRepository.class);
+        attendanceService = new AttendanceService(attendanceRepository, emailService, notificationRepository);
     }
 
     @Test
@@ -52,6 +56,7 @@ class QrAttendanceServiceTest {
         assertEquals("Shiva Kumar", response.getStudent().getFullName());
         verify(attendanceRepository, times(1)).recordQrAttendance(10L, 1L, 100L, "QR_SCAN", "Mobile Admin Scanner");
         verify(attendanceRepository, times(1)).logAudit(eq(1L), eq(100L), eq(10L), eq("QR-VALID-12345"), eq("SUCCESS"), any(), any(), any());
+        verify(emailService, times(1)).sendAttendanceMarkedEmail(eq("student@skillportal.com"), eq("Shiva Kumar"), eq("STU-2026-001"), eq("Java Full Stack 2026"), any(), any(), any());
     }
 
     @Test

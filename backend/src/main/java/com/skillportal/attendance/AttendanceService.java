@@ -15,10 +15,21 @@ import java.util.UUID;
 public class AttendanceService {
 
     private final AttendanceRepository attendanceRepository;
+    private final com.skillportal.email.EmailService emailService;
+    private final com.skillportal.notification.NotificationRepository notificationRepository;
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("hh:mm a");
 
-    public AttendanceService(AttendanceRepository attendanceRepository) {
+    public AttendanceService(
+            AttendanceRepository attendanceRepository,
+            com.skillportal.email.EmailService emailService,
+            com.skillportal.notification.NotificationRepository notificationRepository) {
         this.attendanceRepository = attendanceRepository;
+        this.emailService = emailService;
+        this.notificationRepository = notificationRepository;
+    }
+
+    public AttendanceService(AttendanceRepository attendanceRepository) {
+        this(attendanceRepository, null, null);
     }
 
     public AttendanceDto.StudentAttendanceSummary getStudentAttendance(Long userId) {
@@ -109,14 +120,44 @@ public class AttendanceService {
         attendanceRepository.recordQrAttendance(sessionId, student.studentId, adminUserId, "QR_SCAN", request.getDeviceInfo());
         attendanceRepository.logAudit(student.studentId, adminUserId, sessionId, token, "SUCCESS", request.getDeviceInfo(), ipAddress, "Marked present via QR scanner");
 
+        String timeStr = TIME_FORMATTER.format(LocalTime.now());
+        String dateStr = LocalDate.now().toString();
+        String sessionTitle = "Classroom Session - " + dateStr;
+
+        // 7. Real-time email notification to that particular student
+        if (emailService != null && student.email != null && !student.email.trim().isEmpty()) {
+            emailService.sendAttendanceMarkedEmail(
+                    student.email,
+                    student.fullName,
+                    student.studentIdNumber,
+                    student.batchName,
+                    dateStr,
+                    timeStr,
+                    sessionTitle
+            );
+        }
+
+        // 8. Create instant in-app notification for the student
+        if (notificationRepository != null && student.userId != null) {
+            try {
+                notificationRepository.createNotification(
+                        student.userId,
+                        "Attendance Marked: Present",
+                        "Your attendance for " + sessionTitle + " was recorded via QR scan at " + timeStr + ". An email confirmation was sent to " + student.email + ".",
+                        "ATTENDANCE",
+                        "/attendance"
+                );
+            } catch (Exception ignored) {}
+        }
+
         AttendanceDto.QrScanResponse resp = new AttendanceDto.QrScanResponse();
         resp.setAttendanceStatus("PRESENT");
         resp.setMessage("Attendance marked successfully.");
         resp.setStudent(studentInfo);
-        resp.setAttendanceDate(LocalDate.now().toString());
-        resp.setAttendanceTime(TIME_FORMATTER.format(LocalTime.now()));
+        resp.setAttendanceDate(dateStr);
+        resp.setAttendanceTime(timeStr);
         resp.setSessionId(sessionId);
-        resp.setSessionTitle("Classroom Session - " + LocalDate.now());
+        resp.setSessionTitle(sessionTitle);
         resp.setSource("QR_SCAN");
         resp.setMarkedAt(Instant.now().toString());
         return resp;

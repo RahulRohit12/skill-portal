@@ -17,7 +17,8 @@ import {
   ChevronRight,
   Sparkles,
   Volume2,
-  VolumeX
+  VolumeX,
+  Mail
 } from 'lucide-react';
 import api from '../api/client';
 import { QrScanResponse, TodayScanItem } from '../types';
@@ -409,6 +410,18 @@ export const AdminScannerPage: React.FC = () => {
                         {lastResult.source || 'QR_SCAN'}
                       </span>
                     </div>
+                    {lastResult.attendanceStatus === 'PRESENT' && (
+                      <div className="flex items-center justify-between text-slate-400 pt-0.5">
+                        <span className="flex items-center gap-1.5">
+                          <Mail className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Student Email Notice:</span>
+                        </span>
+                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                          <span>Dispatched Realtime</span>
+                          <CheckCircle2 className="w-3 h-3" />
+                        </span>
+                      </div>
+                    )}
                     {lastResult.existingMarkedAt && (
                       <div className="flex items-center justify-between text-amber-400 font-medium">
                         <span>Original Scan:</span>
