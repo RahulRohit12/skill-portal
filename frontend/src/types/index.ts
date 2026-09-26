@@ -1013,3 +1013,31 @@ export interface TodayScanItem {
   remarks?: string;
 }
 
+export interface EmailDiagnosticDto {
+  smtpHost: string;
+  smtpPort: number;
+  senderEmail: string;
+  passwordConfigured: boolean;
+  readyToSend: boolean;
+  statusMessage: string;
+  recentLogs: EmailLogItem[];
+}
+
+export interface EmailLogItem {
+  id: number;
+  recipientEmail: string;
+  studentName?: string;
+  emailType: string;
+  subject: string;
+  status: 'SENT' | 'FAILED' | 'SIMULATED';
+  errorMessage?: string;
+  createdAt: string;
+}
+
+export interface EmailTestResult {
+  success: boolean;
+  message: string;
+  recipient: string;
+  errorDetails?: string;
+}
+

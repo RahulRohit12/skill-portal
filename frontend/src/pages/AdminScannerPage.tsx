@@ -18,10 +18,15 @@ import {
   Sparkles,
   Volume2,
   VolumeX,
-  Mail
+  Mail,
+  Send,
+  X,
+  ExternalLink,
+  Settings,
+  Info
 } from 'lucide-react';
 import api from '../api/client';
-import { QrScanResponse, TodayScanItem } from '../types';
+import { QrScanResponse, TodayScanItem, EmailDiagnosticDto, EmailTestResult } from '../types';
 
 export const AdminScannerPage: React.FC = () => {
   const navigate = useNavigate();
@@ -39,6 +44,18 @@ export const AdminScannerPage: React.FC = () => {
   // Today's scans state
   const [todayScans, setTodayScans] = useState<TodayScanItem[]>([]);
   const [loadingScans, setLoadingScans] = useState<boolean>(false);
+
+  // Email diagnostic modal state
+  const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
+  const [emailStatus, setEmailStatus] = useState<EmailDiagnosticDto | null>(null);
+  const [loadingEmailStatus, setLoadingEmailStatus] = useState<boolean>(false);
+  const [testEmailAddress, setTestEmailAddress] = useState<string>('diggaviprajwal55@gmail.com');
+  const [sendingTestEmail, setSendingTestEmail] = useState<boolean>(false);
+  const [testEmailResult, setTestEmailResult] = useState<EmailTestResult | null>(null);
+  const [targetStudentId, setTargetStudentId] = useState<string>('1');
+  const [studentCustomEmail, setStudentCustomEmail] = useState<string>('diggaviprajwal55@gmail.com');
+  const [updatingStudentEmail, setUpdatingStudentEmail] = useState<boolean>(false);
+  const [updateEmailNotice, setUpdateEmailNotice] = useState<string | null>(null);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const isProcessingRef = useRef<boolean>(false);
@@ -87,9 +104,69 @@ export const AdminScannerPage: React.FC = () => {
     }
   };
 
+  const fetchEmailStatus = async () => {
+    setLoadingEmailStatus(true);
+    try {
+      const res = await api.get('/admin/email/status');
+      setEmailStatus(res.data?.data || null);
+    } catch (err) {
+      console.error('Failed to fetch email status', err);
+    } finally {
+      setLoadingEmailStatus(false);
+    }
+  };
+
   useEffect(() => {
     fetchTodayScans();
+    fetchEmailStatus();
   }, []);
+
+  const handleSendTestEmail = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!testEmailAddress.trim() || sendingTestEmail) return;
+    setSendingTestEmail(true);
+    setTestEmailResult(null);
+    try {
+      const res = await api.post('/admin/email/test', { to: testEmailAddress.trim() });
+      setTestEmailResult(res.data?.data || { success: true, message: 'Test email successfully dispatched!', recipient: testEmailAddress });
+      fetchEmailStatus();
+    } catch (err: any) {
+      const errMsg = err.response?.data?.message || err.message || 'Failed to dispatch test email.';
+      setTestEmailResult({
+        success: false,
+        message: errMsg,
+        recipient: testEmailAddress,
+        errorDetails: err.response?.data?.data?.errorDetails || errMsg
+      });
+      fetchEmailStatus();
+    } finally {
+      setSendingTestEmail(false);
+    }
+  };
+
+  const handleUpdateStudentEmail = async (studentId: number, newEmail: string) => {
+    if (!newEmail.trim() || updatingStudentEmail) return;
+    setUpdatingStudentEmail(true);
+    setUpdateEmailNotice(null);
+    try {
+      await api.post('/admin/email/update-student-email', { studentId, email: newEmail.trim() });
+      setUpdateEmailNotice(`Successfully linked student #${studentId} to ${newEmail.trim()}!`);
+      if (lastResult?.student && lastResult.student.id === studentId) {
+        setLastResult({
+          ...lastResult,
+          student: {
+            ...lastResult.student,
+            email: newEmail.trim(),
+          }
+        });
+      }
+      fetchEmailStatus();
+    } catch (err: any) {
+      setUpdateEmailNotice(`Failed: ${err.response?.data?.message || 'Error updating student email'}`);
+    } finally {
+      setUpdatingStudentEmail(false);
+    }
+  };
 
   const handleProcessScan = async (token: string) => {
     if (!token || isProcessingRef.current) return;
@@ -263,6 +340,22 @@ export const AdminScannerPage: React.FC = () => {
               <span>Start Camera</span>
             </button>
           )}
+
+          {/* Email Settings / Diagnostics button */}
+          <button
+            onClick={() => {
+              setShowEmailModal(true);
+              fetchEmailStatus();
+            }}
+            className="px-3.5 py-2 rounded-xl bg-cyan-950/40 border border-cyan-800/40 text-cyan-300 hover:bg-cyan-900/50 text-xs font-bold transition-all flex items-center gap-1.5"
+            title="Configure and test attendance notification emails"
+          >
+            <Mail className="w-4 h-4 text-[#00c2ff]" />
+            <span>Email Status & Test</span>
+            {emailStatus?.readyToSend && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            )}
+          </button>
         </div>
       </div>
 
@@ -411,15 +504,40 @@ export const AdminScannerPage: React.FC = () => {
                       </span>
                     </div>
                     {lastResult.attendanceStatus === 'PRESENT' && (
-                      <div className="flex items-center justify-between text-slate-400 pt-0.5">
-                        <span className="flex items-center gap-1.5">
-                          <Mail className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Student Email Notice:</span>
-                        </span>
-                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                          <span>Dispatched Realtime</span>
-                          <CheckCircle2 className="w-3 h-3" />
-                        </span>
+                      <div className="pt-2 border-t border-[#1b2230] space-y-1.5">
+                        <div className="flex items-center justify-between text-slate-400">
+                          <span className="flex items-center gap-1.5">
+                            <Mail className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Student Email:</span>
+                          </span>
+                          <span className="font-mono text-emerald-300 font-bold truncate max-w-[190px]" title={lastResult.student.email}>
+                            {lastResult.student.email || 'None'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-400">
+                          <span>Dispatch Status:</span>
+                          <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                            <span>Dispatched Realtime</span>
+                            <CheckCircle2 className="w-3 h-3" />
+                          </span>
+                        </div>
+                        {lastResult.student.email !== 'diggaviprajwal55@gmail.com' && (
+                          <div className="pt-1 flex justify-end">
+                            <button
+                              onClick={() => handleUpdateStudentEmail(lastResult.student!.id, 'diggaviprajwal55@gmail.com')}
+                              disabled={updatingStudentEmail}
+                              className="text-[10px] text-[#00c2ff] hover:underline flex items-center gap-1 font-semibold"
+                            >
+                              <span>Update to diggaviprajwal55@gmail.com</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        )}
+                        {updateEmailNotice && (
+                          <p className="text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-1.5 rounded-lg text-center font-medium">
+                            {updateEmailNotice}
+                          </p>
+                        )}
                       </div>
                     )}
                     {lastResult.existingMarkedAt && (
@@ -551,6 +669,248 @@ export const AdminScannerPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Email Notification & Diagnostic Modal */}
+      {showEmailModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl bg-[#0e121a] border border-[#21293a] rounded-3xl p-6 shadow-2xl space-y-5 my-8">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#1b2230] pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-cyan-950/60 border border-cyan-800/40 text-[#00c2ff]">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white">
+                    Attendance Email Delivery & Diagnostic Center
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Verify live Gmail SMTP connection and test real-time student delivery
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowEmailModal(false)}
+                className="p-2 rounded-xl hover:bg-[#1a2130] text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* SMTP Status Overview */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-2xl bg-[#141824] border border-[#1e2538]">
+                <span className="text-[11px] text-slate-400 font-medium block">SMTP Host & Port</span>
+                <span className="text-xs font-mono font-bold text-white mt-1 block">
+                  {emailStatus?.smtpHost || 'smtp.gmail.com'}:{emailStatus?.smtpPort || 587}
+                </span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-[#141824] border border-[#1e2538]">
+                <span className="text-[11px] text-slate-400 font-medium block">Sender Account</span>
+                <span className="text-xs font-mono font-bold text-[#00c2ff] truncate mt-1 block" title={emailStatus?.senderEmail}>
+                  {emailStatus?.senderEmail || 'diggaviprajwal55@gmail.com'}
+                </span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-[#141824] border border-[#1e2538]">
+                <span className="text-[11px] text-slate-400 font-medium block">App Password Status</span>
+                <span className={`text-xs font-bold mt-1 inline-flex items-center gap-1 ${
+                  emailStatus?.passwordConfigured ? 'text-emerald-400' : 'text-amber-400'
+                }`}>
+                  {emailStatus?.passwordConfigured ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Configured</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span>Missing in Render</span>
+                    </>
+                  )}
+                </span>
+              </div>
+            </div>
+
+            {/* Status Message Alert */}
+            {emailStatus?.statusMessage && (
+              <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                emailStatus.readyToSend
+                  ? 'bg-emerald-950/30 border-emerald-800/40 text-emerald-300'
+                  : 'bg-amber-950/30 border-amber-800/40 text-amber-300'
+              }`}>
+                <Info className="w-4 h-4 shrink-0" />
+                <span>{emailStatus.statusMessage}</span>
+              </div>
+            )}
+
+            {/* Test Email Section */}
+            <div className="p-4 rounded-2xl bg-[#141824] border border-[#1e2538] space-y-3">
+              <div>
+                <h3 className="text-xs font-black text-white uppercase tracking-wider">
+                  🧪 Send Live Verification Email
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Test if Gmail SMTP sends an email directly to your inbox right now.
+                </p>
+              </div>
+
+              <form onSubmit={handleSendTestEmail} className="flex gap-2">
+                <input
+                  type="email"
+                  value={testEmailAddress}
+                  onChange={(e) => setTestEmailAddress(e.target.value)}
+                  placeholder="Enter recipient email (e.g. diggaviprajwal55@gmail.com)"
+                  className="flex-1 bg-[#0c0e14] border border-[#21293a] focus:border-[#00b4d8] text-white text-xs px-3.5 py-2.5 rounded-xl outline-none transition-all placeholder:text-slate-500 font-mono"
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={sendingTestEmail || !testEmailAddress.trim()}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#00b4d8] to-[#0096c7] hover:from-[#00c2ff] hover:to-[#00b4d8] disabled:opacity-50 text-slate-950 font-black text-xs transition-all flex items-center gap-1.5 shrink-0 shadow-lg shadow-cyan-500/20"
+                >
+                  {sendingTestEmail ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5" />
+                  )}
+                  <span>{sendingTestEmail ? 'Sending...' : 'Send Test'}</span>
+                </button>
+              </form>
+
+              {testEmailResult && (
+                <div className={`p-3 rounded-xl border text-xs ${
+                  testEmailResult.success
+                    ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300'
+                    : 'bg-rose-950/40 border-rose-800 text-rose-300'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    {testEmailResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+                    ) : (
+                      <XCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+                    )}
+                    <div className="space-y-1">
+                      <p className="font-bold">{testEmailResult.message}</p>
+                      {testEmailResult.errorDetails && (
+                        <p className="text-[11px] font-mono text-rose-400/90 break-all bg-black/40 p-2 rounded-lg">
+                          {testEmailResult.errorDetails}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Link Student Recipient Email */}
+            <div className="p-4 rounded-2xl bg-[#141824] border border-[#1e2538] space-y-3">
+              <div>
+                <h3 className="text-xs font-black text-white uppercase tracking-wider">
+                  🎓 Link Demo Student to Personal Email
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Set your personal email on student STU-2026-001 so attendance QR scans deliver to your inbox.
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={studentCustomEmail}
+                  onChange={(e) => setStudentCustomEmail(e.target.value)}
+                  placeholder="Student target email (diggaviprajwal55@gmail.com)"
+                  className="flex-1 bg-[#0c0e14] border border-[#21293a] focus:border-[#00b4d8] text-white text-xs px-3.5 py-2.5 rounded-xl outline-none transition-all placeholder:text-slate-500 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleUpdateStudentEmail(1, studentCustomEmail)}
+                  disabled={updatingStudentEmail || !studentCustomEmail.trim()}
+                  className="px-4 py-2.5 rounded-xl bg-[#1f2638] hover:bg-[#2b354e] text-white font-bold text-xs transition-all shrink-0"
+                >
+                  {updatingStudentEmail ? 'Linking...' : 'Update Student 1 Email'}
+                </button>
+              </div>
+
+              {updateEmailNotice && (
+                <p className="text-xs text-emerald-400 bg-emerald-950/30 border border-emerald-800/40 p-2 rounded-lg">
+                  {updateEmailNotice}
+                </p>
+              )}
+            </div>
+
+            {/* Recent Email Logs Table */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black text-white uppercase tracking-wider">
+                  📜 Recent Delivery Logs
+                </h3>
+                <button
+                  onClick={fetchEmailStatus}
+                  className="text-[11px] text-slate-400 hover:text-[#00c2ff] flex items-center gap-1"
+                >
+                  <RefreshCw className={`w-3 h-3 ${loadingEmailStatus ? 'animate-spin' : ''}`} />
+                  <span>Refresh Logs</span>
+                </button>
+              </div>
+
+              <div className="max-h-48 overflow-y-auto rounded-xl border border-[#1e2538] bg-[#0c0e14]">
+                {!emailStatus?.recentLogs || emailStatus.recentLogs.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-500">
+                    No attendance email logs recorded yet.
+                  </div>
+                ) : (
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#141824] text-[10px] text-slate-400 uppercase border-b border-[#1e2538]">
+                      <tr>
+                        <th className="p-2.5">Time</th>
+                        <th className="p-2.5">Recipient</th>
+                        <th className="p-2.5">Student</th>
+                        <th className="p-2.5">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#171d2b]">
+                      {emailStatus.recentLogs.map((log) => (
+                        <tr key={log.id} className="hover:bg-[#121622]">
+                          <td className="p-2.5 font-mono text-[10px] text-slate-400">
+                            {log.createdAt ? new Date(log.createdAt).toLocaleTimeString() : 'N/A'}
+                          </td>
+                          <td className="p-2.5 font-mono text-slate-300">
+                            {log.recipientEmail}
+                          </td>
+                          <td className="p-2.5 text-slate-400">
+                            {log.studentName || 'Student'}
+                          </td>
+                          <td className="p-2.5">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              log.status === 'SENT'
+                                ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                                : log.status === 'FAILED'
+                                ? 'bg-rose-950 text-rose-400 border border-rose-800'
+                                : 'bg-amber-950 text-amber-400 border border-amber-800'
+                            }`} title={log.errorMessage || ''}>
+                              {log.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Close */}
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setShowEmailModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-[#181d2a] hover:bg-[#232b3d] text-white font-bold text-xs transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

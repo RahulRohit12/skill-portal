@@ -10,4 +10,10 @@ public interface EmailService {
             String attendanceTime,
             String sessionTitle
     );
+
+    EmailDto.EmailDiagnosticDto getEmailStatus();
+
+    EmailDto.EmailTestResult sendTestEmail(String recipientEmail);
+
+    boolean updateStudentEmail(Long studentId, String newEmail);
 }

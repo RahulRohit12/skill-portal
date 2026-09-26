@@ -7,9 +7,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
 @Service
@@ -26,8 +30,48 @@ public class EmailServiceImpl implements EmailService {
     @Value("${spring.mail.username:}")
     private String mailUsername;
 
+    @Value("${spring.mail.password:}")
+    private String mailPassword;
+
+    @Value("${spring.mail.host:smtp.gmail.com}")
+    private String mailHost;
+
+    @Value("${spring.mail.port:587}")
+    private int mailPort;
+
     @Value("${app.frontend.url:https://skill-portal-1-mn1n.onrender.com}")
     private String frontendUrl;
+
+    private synchronized JavaMailSender getEffectiveMailSender() {
+        if (this.mailSender != null) {
+            return this.mailSender;
+        }
+
+        JavaMailSenderImpl impl = new JavaMailSenderImpl();
+        impl.setHost(mailHost != null && !mailHost.trim().isEmpty() ? mailHost.trim() : "smtp.gmail.com");
+        impl.setPort(mailPort > 0 ? mailPort : 587);
+        if (mailUsername != null) impl.setUsername(mailUsername.trim());
+        if (mailPassword != null) impl.setPassword(mailPassword.trim());
+
+        Properties props = impl.getJavaMailProperties();
+        props.put("mail.transport.protocol", "smtp");
+        props.put("mail.smtp.auth", "true");
+        props.put("mail.smtp.starttls.enable", "true");
+        props.put("mail.smtp.starttls.required", "true");
+        props.put("mail.smtp.ssl.trust", "*");
+        props.put("mail.smtp.ssl.protocols", "TLSv1.2 TLSv1.3");
+        props.put("mail.smtp.connectiontimeout", "15000");
+        props.put("mail.smtp.timeout", "15000");
+        props.put("mail.smtp.writetimeout", "15000");
+
+        this.mailSender = impl;
+        return impl;
+    }
+
+    private boolean isSmtpConfigured() {
+        return mailUsername != null && !mailUsername.trim().isEmpty()
+                && mailPassword != null && !mailPassword.trim().isEmpty();
+    }
 
     @Override
     public void sendAttendanceMarkedEmail(
@@ -75,25 +119,29 @@ public class EmailServiceImpl implements EmailService {
             boolean sentViaSmtp = false;
             String errorMessage = null;
 
-            if (mailSender != null && mailUsername != null && !mailUsername.trim().isEmpty()) {
+            if (isSmtpConfigured()) {
                 try {
-                    MimeMessage mimeMessage = mailSender.createMimeMessage();
+                    JavaMailSender sender = getEffectiveMailSender();
+                    MimeMessage mimeMessage = sender.createMimeMessage();
                     MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
-                    helper.setFrom(mailUsername, "SkillX Academy Attendance");
+                    helper.setFrom(mailUsername.trim(), "SkillX Academy Attendance");
                     helper.setTo(targetEmail);
                     helper.setSubject(subject);
                     helper.setText(plainText, htmlContent);
 
-                    mailSender.send(mimeMessage);
+                    sender.send(mimeMessage);
                     sentViaSmtp = true;
                     log.info("Real-time attendance email successfully dispatched via SMTP to {}", targetEmail);
                 } catch (Exception ex) {
                     errorMessage = ex.getMessage();
-                    log.warn("SMTP email delivery notice for {}: {}. Logged in audit registry.", targetEmail, ex.getMessage());
+                    if (ex.getCause() != null && ex.getCause().getMessage() != null) {
+                        errorMessage += " (Cause: " + ex.getCause().getMessage() + ")";
+                    }
+                    log.error("SMTP email delivery failed for recipient {}: {}", targetEmail, errorMessage, ex);
                 }
             } else {
-                log.info("[REAL-TIME ATTENDANCE EMAIL] Dispatched to: {} | Student: {} ({}) | Session: {} | Status: PRESENT | Time: {} {}",
-                        targetEmail, effectiveStudentName, effectiveStudentId, effectiveSession, effectiveDate, effectiveTime);
+                log.info("[SIMULATED EMAIL] Recipient: {} | Student: {} ({}) | Session: {} | Note: SMTP credentials not set on Render.",
+                        targetEmail, effectiveStudentName, effectiveStudentId, effectiveSession);
             }
 
             // Persist to email_logs audit table
@@ -105,6 +153,147 @@ public class EmailServiceImpl implements EmailService {
                 log.debug("Notice recording email audit log: {}", dbEx.getMessage());
             }
         });
+    }
+
+    @Override
+    public EmailDto.EmailDiagnosticDto getEmailStatus() {
+        EmailDto.EmailDiagnosticDto dto = new EmailDto.EmailDiagnosticDto();
+        dto.setSmtpHost(mailHost != null && !mailHost.trim().isEmpty() ? mailHost : "smtp.gmail.com");
+        dto.setSmtpPort(mailPort > 0 ? mailPort : 587);
+        dto.setSenderEmail(mailUsername != null && !mailUsername.trim().isEmpty() ? mailUsername.trim() : "NOT_CONFIGURED");
+
+        boolean hasPass = mailPassword != null && !mailPassword.trim().isEmpty();
+        dto.setPasswordConfigured(hasPass);
+
+        boolean ready = isSmtpConfigured();
+        dto.setReadyToSend(ready);
+
+        if (!ready) {
+            if (mailUsername == null || mailUsername.trim().isEmpty()) {
+                dto.setStatusMessage("SPRING_MAIL_USERNAME is not set in Render environment variables.");
+            } else if (!hasPass) {
+                dto.setStatusMessage("SPRING_MAIL_PASSWORD is not set in Render environment variables. Generate a 16-letter Google App Password.");
+            }
+        } else {
+            dto.setStatusMessage("SMTP is configured and ready with sender " + mailUsername.trim());
+        }
+
+        try {
+            String sql = "SELECT id, recipient_email, student_name, email_type, subject, status, error_message, created_at " +
+                         "FROM email_logs ORDER BY created_at DESC LIMIT 15";
+            List<EmailDto.EmailLogItem> logs = jdbcTemplate.query(sql, (rs, rowNum) -> {
+                EmailDto.EmailLogItem item = new EmailDto.EmailLogItem();
+                item.setId(rs.getLong("id"));
+                item.setRecipientEmail(rs.getString("recipient_email"));
+                item.setStudentName(rs.getString("student_name"));
+                item.setEmailType(rs.getString("email_type"));
+                item.setSubject(rs.getString("subject"));
+                item.setStatus(rs.getString("status"));
+                item.setErrorMessage(rs.getString("error_message"));
+                item.setCreatedAt(rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant().toString() : null);
+                return item;
+            });
+            dto.setRecentLogs(logs);
+        } catch (Exception e) {
+            dto.setRecentLogs(List.of());
+        }
+
+        return dto;
+    }
+
+    @Override
+    public EmailDto.EmailTestResult sendTestEmail(String recipientEmail) {
+        EmailDto.EmailTestResult result = new EmailDto.EmailTestResult();
+        String target = recipientEmail != null ? recipientEmail.trim() : "";
+        result.setRecipient(target);
+
+        if (target.isEmpty()) {
+            result.setSuccess(false);
+            result.setMessage("Recipient email address cannot be empty.");
+            return result;
+        }
+
+        if (mailUsername == null || mailUsername.trim().isEmpty()) {
+            result.setSuccess(false);
+            result.setMessage("SPRING_MAIL_USERNAME environment variable is not configured in Render.");
+            return result;
+        }
+
+        if (mailPassword == null || mailPassword.trim().isEmpty()) {
+            result.setSuccess(false);
+            result.setMessage("SPRING_MAIL_PASSWORD environment variable is not configured in Render. (Need Google 16-character App Password).");
+            return result;
+        }
+
+        try {
+            JavaMailSender sender = getEffectiveMailSender();
+            MimeMessage mimeMessage = sender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setFrom(mailUsername.trim(), "SkillX Academy");
+            helper.setTo(target);
+            helper.setSubject("🧪 Test Verification: SkillX Attendance Real-Time Email System");
+
+            String html = "<!DOCTYPE html><html><body style='font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif;background:#0f172a;padding:24px;color:#f8fafc;'>" +
+                    "<div style='max-width:520px;margin:auto;background:#1e293b;border-radius:16px;padding:32px;border:1px solid #334155;'>" +
+                    "<h2 style='color:#38bdf8;margin-top:0;'>🧪 SMTP Connection Verified!</h2>" +
+                    "<p style='color:#cbd5e1;font-size:14px;line-height:1.6;'>This test email confirms that your <strong>SkillX Real-Time Attendance System</strong> is successfully connected to Gmail SMTP and delivering emails.</p>" +
+                    "<div style='background:#0f172a;border-radius:10px;padding:16px;margin:20px 0;font-size:13px;border:1px solid #334155;'>" +
+                    "<div><strong style='color:#94a3b8;'>Sender Account:</strong> <span style='color:#38bdf8;font-family:monospace;'>" + mailUsername.trim() + "</span></div>" +
+                    "<div style='margin-top:8px;'><strong style='color:#94a3b8;'>Delivered To:</strong> <span style='color:#34d399;font-family:monospace;'>" + target + "</span></div>" +
+                    "<div style='margin-top:8px;'><strong style='color:#94a3b8;'>Host & Port:</strong> <span style='color:#cbd5e1;font-family:monospace;'>" + mailHost + ":" + mailPort + "</span></div>" +
+                    "<div style='margin-top:8px;'><strong style='color:#94a3b8;'>Timestamp:</strong> <span style='color:#cbd5e1;font-family:monospace;'>" + Instant.now() + "</span></div>" +
+                    "</div>" +
+                    "<p style='color:#34d399;font-weight:700;font-size:14px;margin-bottom:0;'>✓ Live Attendance QR scans will now deliver real-time notices to registered students!</p>" +
+                    "</div></body></html>";
+
+            helper.setText(
+                    "SMTP Test Verification Success!\n\nSender: " + mailUsername.trim() + "\nRecipient: " + target + "\nHost: " + mailHost + ":" + mailPort + "\nTime: " + Instant.now(),
+                    html
+            );
+
+            sender.send(mimeMessage);
+            result.setSuccess(true);
+            result.setMessage("Test email successfully delivered to " + target + "! Check your inbox (or Spam/Promotions folder).");
+
+            try {
+                jdbcTemplate.update("INSERT INTO email_logs (recipient_email, student_name, email_type, subject, status, error_message) VALUES (?, 'System Admin', 'TEST_EMAIL', '🧪 Test Verification', 'SENT', NULL)",
+                        target);
+            } catch (Exception ignored) {}
+
+            return result;
+        } catch (Exception ex) {
+            String errorMsg = ex.getMessage();
+            if (ex.getCause() != null && ex.getCause().getMessage() != null) {
+                errorMsg += " -> " + ex.getCause().getMessage();
+            }
+            log.error("Failed to dispatch test email to {}: {}", target, errorMsg, ex);
+
+            result.setSuccess(false);
+            result.setMessage("SMTP Delivery Failed: " + errorMsg);
+            result.setErrorDetails(errorMsg);
+
+            try {
+                jdbcTemplate.update("INSERT INTO email_logs (recipient_email, student_name, email_type, subject, status, error_message) VALUES (?, 'System Admin', 'TEST_EMAIL', '🧪 Test Verification', 'FAILED', ?)",
+                        target, errorMsg);
+            } catch (Exception ignored) {}
+
+            return result;
+        }
+    }
+
+    @Override
+    public boolean updateStudentEmail(Long studentId, String newEmail) {
+        if (studentId == null || newEmail == null || newEmail.trim().isEmpty()) {
+            return false;
+        }
+        try {
+            String sql = "UPDATE users u JOIN students s ON s.user_id = u.id SET u.email = ? WHERE s.id = ?";
+            int rows = jdbcTemplate.update(sql, newEmail.trim(), studentId);
+            return rows > 0;
+        } catch (Exception e) {
+            log.error("Failed to update student email: {}", e.getMessage());
+            return false;
+        }
     }
 
     private String buildHtmlTemplate(
@@ -138,37 +327,32 @@ public class EmailServiceImpl implements EmailService {
                 "</style>\n" +
                 "</head>\n" +
                 "<body>\n" +
-                "<div class=\"container\">\n" +
-                "  <div class=\"header\">\n" +
-                "    <h1>SkillX Academy</h1>\n" +
-                "    <p>Automated Attendance Verification</p>\n" +
-                "  </div>\n" +
-                "  <div class=\"body\">\n" +
-                "    <div class=\"badge\">✔ ATTENDANCE RECORDED: PRESENT</div>\n" +
-                "    <p style=\"font-size: 15px; margin: 0 0 14px 0;\">Hello <strong>" + studentName + "</strong>,</p>\n" +
-                "    <p style=\"font-size: 13px; color: #475569; line-height: 1.6; margin: 0;\">\n" +
-                "      Your attendance for <strong>" + sessionTitle + "</strong> has been successfully scanned and marked <strong>PRESENT</strong>.\n" +
-                "    </p>\n" +
-                "\n" +
-                "    <div class=\"details\">\n" +
-                "      <div class=\"row\"><span class=\"label\">Student Name:</span><span class=\"val\">" + studentName + "</span></div>\n" +
-                "      <div class=\"row\"><span class=\"label\">Student ID:</span><span class=\"val\">" + studentId + "</span></div>\n" +
-                "      <div class=\"row\"><span class=\"label\">Batch:</span><span class=\"val\">" + batchName + "</span></div>\n" +
-                "      <div class=\"row\"><span class=\"label\">Date:</span><span class=\"val\">" + date + "</span></div>\n" +
-                "      <div class=\"row\"><span class=\"label\">Scan Time:</span><span class=\"val\">" + time + "</span></div>\n" +
-                "      <div class=\"row\"><span class=\"label\">Status:</span><span class=\"val\" style=\"color: #16a34a;\">PRESENT</span></div>\n" +
-                "      <div class=\"row\"><span class=\"label\">Method:</span><span class=\"val\">Instructor QR Scanner</span></div>\n" +
+                "  <div class=\"container\">\n" +
+                "    <div class=\"header\">\n" +
+                "      <h1>SkillX Academy Attendance</h1>\n" +
+                "      <p>Official Verification Notice</p>\n" +
                 "    </div>\n" +
-                "\n" +
-                "    <div class=\"btn-container\">\n" +
-                "      <a href=\"" + frontendUrl + "/attendance\" class=\"btn\">View Monthly Attendance</a>\n" +
+                "    <div class=\"body\">\n" +
+                "      <div class=\"badge\">✓ STATUS: PRESENT</div>\n" +
+                "      <p>Dear <strong>" + studentName + "</strong>,</p>\n" +
+                "      <p>Your attendance has been successfully verified and recorded via your unique QR identity token for today's session.</p>\n" +
+                "      <div class=\"details\">\n" +
+                "        <div class=\"row\"><span class=\"label\">Student ID</span><span class=\"val\">" + studentId + "</span></div>\n" +
+                "        <div class=\"row\"><span class=\"label\">Session Topic</span><span class=\"val\">" + sessionTitle + "</span></div>\n" +
+                "        <div class=\"row\"><span class=\"label\">Batch</span><span class=\"val\">" + batchName + "</span></div>\n" +
+                "        <div class=\"row\"><span class=\"label\">Date</span><span class=\"val\">" + date + "</span></div>\n" +
+                "        <div class=\"row\"><span class=\"label\">Scan Time</span><span class=\"val\">" + time + "</span></div>\n" +
+                "        <div class=\"row\"><span class=\"label\">Verification Mode</span><span class=\"val\" style=\"color:#0284c7;\">QR Biometric Token</span></div>\n" +
+                "      </div>\n" +
+                "      <p style=\"font-size: 13px; color: #64748b;\">Keep up the consistency! Consistent attendance contributes directly to your batch leaderboard rank and placement eligibility score.</p>\n" +
+                "      <div class=\"btn-container\">\n" +
+                "        <a href=\"" + frontendUrl + "/attendance\" class=\"btn\">View My Attendance Record</a>\n" +
+                "      </div>\n" +
+                "    </div>\n" +
+                "    <div class=\"footer\">\n" +
+                "      &copy; 2026 SkillX Academy. This is an automated real-time notification generated upon QR verification.\n" +
                 "    </div>\n" +
                 "  </div>\n" +
-                "  <div class=\"footer\">\n" +
-                "    <p>SkillX Academy · Automated Attendance Notification System</p>\n" +
-                "    <p>This is a real-time verification confirmation. No reply is required.</p>\n" +
-                "  </div>\n" +
-                "</div>\n" +
                 "</body>\n" +
                 "</html>";
     }
@@ -181,18 +365,20 @@ public class EmailServiceImpl implements EmailService {
             String time,
             String sessionTitle) {
 
-        return "SkillX Academy - Attendance Verification\n\n" +
-                "Hello " + studentName + ",\n\n" +
-                "Your attendance has been successfully recorded as PRESENT for " + sessionTitle + ".\n\n" +
+        return "SKILLX ACADEMY - ATTENDANCE CONFIRMATION\n" +
+                "=========================================\n\n" +
+                "Status: PRESENT\n" +
+                "Dear " + studentName + ",\n\n" +
+                "Your attendance was successfully verified via QR code scan.\n\n" +
                 "Details:\n" +
-                "- Student Name: " + studentName + "\n" +
                 "- Student ID: " + studentId + "\n" +
+                "- Session: " + sessionTitle + "\n" +
                 "- Batch: " + batchName + "\n" +
                 "- Date: " + date + "\n" +
-                "- Time: " + time + "\n" +
-                "- Status: PRESENT\n" +
-                "- Verified Via: Instructor QR Scanner\n\n" +
-                "You can view your full attendance log on the student portal: " + frontendUrl + "/attendance\n\n" +
-                "--\nSkillX Academy Attendance Team";
+                "- Scan Time: " + time + "\n" +
+                "- Method: QR Scanner\n\n" +
+                "View your complete attendance ledger: " + frontendUrl + "/attendance\n\n" +
+                "Best regards,\n" +
+                "SkillX Academy Administration";
     }
 }
