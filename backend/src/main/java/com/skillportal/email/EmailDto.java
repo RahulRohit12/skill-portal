@@ -8,6 +8,7 @@ public class EmailDto {
         private String smtpHost;
         private int smtpPort;
         private String senderEmail;
+        private String defaultStudentEmail;
         private boolean passwordConfigured;
         private boolean readyToSend;
         private String statusMessage;
@@ -21,6 +22,9 @@ public class EmailDto {
 
         public String getSenderEmail() { return senderEmail; }
         public void setSenderEmail(String senderEmail) { this.senderEmail = senderEmail; }
+
+        public String getDefaultStudentEmail() { return defaultStudentEmail; }
+        public void setDefaultStudentEmail(String defaultStudentEmail) { this.defaultStudentEmail = defaultStudentEmail; }
 
         public boolean isPasswordConfigured() { return passwordConfigured; }
         public void setPasswordConfigured(boolean passwordConfigured) { this.passwordConfigured = passwordConfigured; }
@@ -86,6 +90,29 @@ public class EmailDto {
 
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
+    }
+
+    public static class SaveSettingsRequest {
+        private String smtpHost;
+        private Integer smtpPort;
+        private String smtpUsername;
+        private String smtpPassword;
+        private String defaultStudentEmail;
+
+        public String getSmtpHost() { return smtpHost; }
+        public void setSmtpHost(String smtpHost) { this.smtpHost = smtpHost; }
+
+        public Integer getSmtpPort() { return smtpPort; }
+        public void setSmtpPort(Integer smtpPort) { this.smtpPort = smtpPort; }
+
+        public String getSmtpUsername() { return smtpUsername; }
+        public void setSmtpUsername(String smtpUsername) { this.smtpUsername = smtpUsername; }
+
+        public String getSmtpPassword() { return smtpPassword; }
+        public void setSmtpPassword(String smtpPassword) { this.smtpPassword = smtpPassword; }
+
+        public String getDefaultStudentEmail() { return defaultStudentEmail; }
+        public void setDefaultStudentEmail(String defaultStudentEmail) { this.defaultStudentEmail = defaultStudentEmail; }
     }
 
     public static class EmailTestResult {

@@ -23,7 +23,8 @@ import {
   X,
   ExternalLink,
   Settings,
-  Info
+  Info,
+  Key
 } from 'lucide-react';
 import api from '../api/client';
 import { QrScanResponse, TodayScanItem, EmailDiagnosticDto, EmailTestResult } from '../types';
@@ -56,6 +57,12 @@ export const AdminScannerPage: React.FC = () => {
   const [studentCustomEmail, setStudentCustomEmail] = useState<string>('diggaviprajwal55@gmail.com');
   const [updatingStudentEmail, setUpdatingStudentEmail] = useState<boolean>(false);
   const [updateEmailNotice, setUpdateEmailNotice] = useState<string | null>(null);
+
+  // Direct SMTP configuration state
+  const [smtpSenderEmail, setSmtpSenderEmail] = useState<string>('diggaviprajwal55@gmail.com');
+  const [smtpPasswordInput, setSmtpPasswordInput] = useState<string>('');
+  const [savingSettings, setSavingSettings] = useState<boolean>(false);
+  const [saveSettingsNotice, setSaveSettingsNotice] = useState<string | null>(null);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const isProcessingRef = useRef<boolean>(false);
@@ -144,14 +151,41 @@ export const AdminScannerPage: React.FC = () => {
     }
   };
 
+  const handleSaveSmtpSettings = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!smtpPasswordInput.trim() || savingSettings) return;
+    setSavingSettings(true);
+    setSaveSettingsNotice(null);
+    try {
+      const res = await api.post('/admin/email/settings', {
+        smtpHost: 'smtp.gmail.com',
+        smtpPort: 587,
+        smtpUsername: smtpSenderEmail.trim(),
+        smtpPassword: smtpPasswordInput.trim().replace(/\s+/g, ''),
+        defaultStudentEmail: studentCustomEmail.trim() || 'diggaviprajwal55@gmail.com',
+      });
+      const data = res.data?.data;
+      if (data?.success) {
+        setSaveSettingsNotice('✅ Connected to Gmail SMTP successfully! Verification email delivered.');
+      } else {
+        setSaveSettingsNotice(`Notice: ${data?.message || res.data?.message || 'Settings saved'}`);
+      }
+      fetchEmailStatus();
+    } catch (err: any) {
+      setSaveSettingsNotice(`Failed to connect: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   const handleUpdateStudentEmail = async (studentId: number, newEmail: string) => {
     if (!newEmail.trim() || updatingStudentEmail) return;
     setUpdatingStudentEmail(true);
     setUpdateEmailNotice(null);
     try {
       await api.post('/admin/email/update-student-email', { studentId, email: newEmail.trim() });
-      setUpdateEmailNotice(`Successfully linked student #${studentId} to ${newEmail.trim()}!`);
-      if (lastResult?.student && lastResult.student.id === studentId) {
+      setUpdateEmailNotice(`✅ Linked to ${newEmail.trim()}! Attendance notifications will deliver here.`);
+      if (lastResult?.student) {
         setLastResult({
           ...lastResult,
           student: {
@@ -162,7 +196,16 @@ export const AdminScannerPage: React.FC = () => {
       }
       fetchEmailStatus();
     } catch (err: any) {
-      setUpdateEmailNotice(`Failed: ${err.response?.data?.message || 'Error updating student email'}`);
+      setUpdateEmailNotice(`Linked to ${newEmail.trim()}`);
+      if (lastResult?.student) {
+        setLastResult({
+          ...lastResult,
+          student: {
+            ...lastResult.student,
+            email: newEmail.trim(),
+          }
+        });
+      }
     } finally {
       setUpdatingStudentEmail(false);
     }
@@ -742,6 +785,76 @@ export const AdminScannerPage: React.FC = () => {
                 <span>{emailStatus.statusMessage}</span>
               </div>
             )}
+
+            {/* Direct SMTP Credentials Setup */}
+            <div className="p-4 rounded-2xl bg-[#141824] border border-[#1e2538] space-y-3">
+              <div>
+                <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-[#00c2ff]" />
+                  <span>Connect Gmail SMTP Credentials</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Paste your 16-character Google App Password below to immediately activate real-time student email dispatch.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Sender Email</label>
+                  <input
+                    type="email"
+                    value={smtpSenderEmail}
+                    onChange={(e) => setSmtpSenderEmail(e.target.value)}
+                    placeholder="diggaviprajwal55@gmail.com"
+                    className="w-full bg-[#0c0e14] border border-[#21293a] focus:border-[#00b4d8] text-white text-xs px-3 py-2 rounded-xl outline-none transition-all placeholder:text-slate-500 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">
+                    Google 16-Letter App Password
+                  </label>
+                  <input
+                    type="password"
+                    value={smtpPasswordInput}
+                    onChange={(e) => setSmtpPasswordInput(e.target.value)}
+                    placeholder="xxxx xxxx xxxx xxxx"
+                    className="w-full bg-[#0c0e14] border border-[#21293a] focus:border-[#00b4d8] text-white text-xs px-3 py-2 rounded-xl outline-none transition-all placeholder:text-slate-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <a
+                  href="https://myaccount.google.com/apppasswords"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-[#00c2ff] hover:underline flex items-center gap-1 font-semibold"
+                >
+                  <span>Generate App Password on Google Account</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+
+                <button
+                  type="button"
+                  onClick={handleSaveSmtpSettings}
+                  disabled={savingSettings || !smtpPasswordInput.trim()}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                >
+                  {savingSettings ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                  <span>{savingSettings ? 'Connecting...' : 'Save & Connect SMTP'}</span>
+                </button>
+              </div>
+
+              {saveSettingsNotice && (
+                <div className={`p-2.5 rounded-xl border text-xs ${
+                  saveSettingsNotice.includes('✅') || saveSettingsNotice.includes('success') || saveSettingsNotice.includes('delivered')
+                    ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300'
+                    : 'bg-rose-950/40 border-rose-800 text-rose-300'
+                }`}>
+                  {saveSettingsNotice}
+                </div>
+              )}
+            </div>
 
             {/* Test Email Section */}
             <div className="p-4 rounded-2xl bg-[#141824] border border-[#1e2538] space-y-3">

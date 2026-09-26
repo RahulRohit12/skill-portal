@@ -16,4 +16,8 @@ public interface EmailService {
     EmailDto.EmailTestResult sendTestEmail(String recipientEmail);
 
     boolean updateStudentEmail(Long studentId, String newEmail);
+
+    EmailDto.EmailTestResult saveSmtpSettings(EmailDto.SaveSettingsRequest request);
+
+    String getDefaultStudentEmail();
 }

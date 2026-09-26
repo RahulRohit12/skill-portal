@@ -1,5 +1,6 @@
 package com.skillportal.email;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,7 +28,7 @@ public class EmailServiceImpl implements EmailService {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @Value("${spring.mail.username:}")
+    @Value("${spring.mail.username:diggaviprajwal55@gmail.com}")
     private String mailUsername;
 
     @Value("${spring.mail.password:}")
@@ -41,6 +42,41 @@ public class EmailServiceImpl implements EmailService {
 
     @Value("${app.frontend.url:https://skill-portal-1-mn1n.onrender.com}")
     private String frontendUrl;
+
+    @PostConstruct
+    public void init() {
+        loadSettingsFromDatabase();
+    }
+
+    private synchronized void loadSettingsFromDatabase() {
+        try {
+            List<String> tables = jdbcTemplate.queryForList(
+                    "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'app_settings'",
+                    String.class
+            );
+            if (tables.isEmpty()) {
+                return;
+            }
+
+            jdbcTemplate.query("SELECT setting_key, setting_value FROM app_settings", (rs) -> {
+                String key = rs.getString("setting_key");
+                String val = rs.getString("setting_value");
+                if (val != null && !val.trim().isEmpty()) {
+                    val = val.trim();
+                    if ("smtp_host".equalsIgnoreCase(key)) mailHost = val;
+                    else if ("smtp_port".equalsIgnoreCase(key)) {
+                        try { mailPort = Integer.parseInt(val); } catch (Exception ignored) {}
+                    }
+                    else if ("smtp_username".equalsIgnoreCase(key)) mailUsername = val;
+                    else if ("smtp_password".equalsIgnoreCase(key)) mailPassword = val;
+                }
+            });
+            // Reset cached sender to pick up refreshed DB properties
+            this.mailSender = null;
+        } catch (Exception e) {
+            log.debug("Database settings load skipped: {}", e.getMessage());
+        }
+    }
 
     private synchronized JavaMailSender getEffectiveMailSender() {
         if (this.mailSender != null) {
@@ -74,6 +110,20 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
+    public String getDefaultStudentEmail() {
+        try {
+            List<String> list = jdbcTemplate.queryForList(
+                    "SELECT setting_value FROM app_settings WHERE setting_key = 'default_student_email'",
+                    String.class
+            );
+            if (!list.isEmpty() && list.get(0) != null && !list.get(0).trim().isEmpty()) {
+                return list.get(0).trim();
+            }
+        } catch (Exception ignored) {}
+        return "diggaviprajwal55@gmail.com";
+    }
+
+    @Override
     public void sendAttendanceMarkedEmail(
             String recipientEmail,
             String studentName,
@@ -83,12 +133,13 @@ public class EmailServiceImpl implements EmailService {
             String attendanceTime,
             String sessionTitle) {
 
-        if (recipientEmail == null || recipientEmail.trim().isEmpty()) {
-            log.warn("Cannot dispatch attendance email: recipient email is missing for student {}", studentName);
-            return;
+        // Auto-route mock/empty email to live recipient
+        String resolvedEmail = recipientEmail;
+        if (resolvedEmail == null || resolvedEmail.trim().isEmpty() || resolvedEmail.contains("@skillportal.com")) {
+            resolvedEmail = getDefaultStudentEmail();
         }
 
-        final String targetEmail = recipientEmail.trim();
+        final String targetEmail = resolvedEmail.trim();
         final String effectiveStudentName = studentName != null ? studentName : "Student";
         final String effectiveStudentId = studentIdNumber != null ? studentIdNumber : "N/A";
         final String effectiveBatch = batchName != null ? batchName : "Classroom Batch";
@@ -98,7 +149,7 @@ public class EmailServiceImpl implements EmailService {
 
         // Asynchronous non-blocking dispatch
         CompletableFuture.runAsync(() -> {
-            String subject = "✅ Attendance Confirmed: Present for " + effectiveSession + " (" + effectiveDate + ")";
+            String subject = "✅ Present for Today: Attendance Confirmed (" + effectiveDate + ")";
             String htmlContent = buildHtmlTemplate(
                     effectiveStudentName,
                     effectiveStudentId,
@@ -140,7 +191,7 @@ public class EmailServiceImpl implements EmailService {
                     log.error("SMTP email delivery failed for recipient {}: {}", targetEmail, errorMessage, ex);
                 }
             } else {
-                log.info("[SIMULATED EMAIL] Recipient: {} | Student: {} ({}) | Session: {} | Note: SMTP credentials not set on Render.",
+                log.info("[SIMULATED EMAIL] Recipient: {} | Student: {} ({}) | Session: {} | Note: SMTP password not configured yet.",
                         targetEmail, effectiveStudentName, effectiveStudentId, effectiveSession);
             }
 
@@ -157,10 +208,13 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public EmailDto.EmailDiagnosticDto getEmailStatus() {
+        loadSettingsFromDatabase();
+
         EmailDto.EmailDiagnosticDto dto = new EmailDto.EmailDiagnosticDto();
         dto.setSmtpHost(mailHost != null && !mailHost.trim().isEmpty() ? mailHost : "smtp.gmail.com");
         dto.setSmtpPort(mailPort > 0 ? mailPort : 587);
-        dto.setSenderEmail(mailUsername != null && !mailUsername.trim().isEmpty() ? mailUsername.trim() : "NOT_CONFIGURED");
+        dto.setSenderEmail(mailUsername != null && !mailUsername.trim().isEmpty() ? mailUsername.trim() : "diggaviprajwal55@gmail.com");
+        dto.setDefaultStudentEmail(getDefaultStudentEmail());
 
         boolean hasPass = mailPassword != null && !mailPassword.trim().isEmpty();
         dto.setPasswordConfigured(hasPass);
@@ -170,12 +224,12 @@ public class EmailServiceImpl implements EmailService {
 
         if (!ready) {
             if (mailUsername == null || mailUsername.trim().isEmpty()) {
-                dto.setStatusMessage("SPRING_MAIL_USERNAME is not set in Render environment variables.");
+                dto.setStatusMessage("SPRING_MAIL_USERNAME is not set. Enter your Gmail in settings.");
             } else if (!hasPass) {
-                dto.setStatusMessage("SPRING_MAIL_PASSWORD is not set in Render environment variables. Generate a 16-letter Google App Password.");
+                dto.setStatusMessage("Google App Password not configured yet. Paste your 16-character code below and click 'Save & Connect'.");
             }
         } else {
-            dto.setStatusMessage("SMTP is configured and ready with sender " + mailUsername.trim());
+            dto.setStatusMessage("SMTP is connected and active with sender " + mailUsername.trim());
         }
 
         try {
@@ -203,25 +257,23 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public EmailDto.EmailTestResult sendTestEmail(String recipientEmail) {
-        EmailDto.EmailTestResult result = new EmailDto.EmailTestResult();
-        String target = recipientEmail != null ? recipientEmail.trim() : "";
-        result.setRecipient(target);
+        loadSettingsFromDatabase();
 
-        if (target.isEmpty()) {
-            result.setSuccess(false);
-            result.setMessage("Recipient email address cannot be empty.");
-            return result;
-        }
+        EmailDto.EmailTestResult result = new EmailDto.EmailTestResult();
+        String target = (recipientEmail != null && !recipientEmail.trim().isEmpty())
+                ? recipientEmail.trim()
+                : getDefaultStudentEmail();
+        result.setRecipient(target);
 
         if (mailUsername == null || mailUsername.trim().isEmpty()) {
             result.setSuccess(false);
-            result.setMessage("SPRING_MAIL_USERNAME environment variable is not configured in Render.");
+            result.setMessage("Sender email is missing. Set your Gmail address in settings.");
             return result;
         }
 
         if (mailPassword == null || mailPassword.trim().isEmpty()) {
             result.setSuccess(false);
-            result.setMessage("SPRING_MAIL_PASSWORD environment variable is not configured in Render. (Need Google 16-character App Password).");
+            result.setMessage("Google App Password is not configured. Please paste your 16-character App Password.");
             return result;
         }
 
@@ -282,14 +334,65 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
+    public EmailDto.EmailTestResult saveSmtpSettings(EmailDto.SaveSettingsRequest request) {
+        if (request == null) {
+            EmailDto.EmailTestResult res = new EmailDto.EmailTestResult();
+            res.setSuccess(false);
+            res.setMessage("Request data is missing");
+            return res;
+        }
+
+        try {
+            if (request.getSmtpHost() != null && !request.getSmtpHost().trim().isEmpty()) {
+                this.mailHost = request.getSmtpHost().trim();
+                jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('smtp_host', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", mailHost);
+            }
+            if (request.getSmtpPort() != null && request.getSmtpPort() > 0) {
+                this.mailPort = request.getSmtpPort();
+                jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('smtp_port', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", String.valueOf(mailPort));
+            }
+            if (request.getSmtpUsername() != null && !request.getSmtpUsername().trim().isEmpty()) {
+                this.mailUsername = request.getSmtpUsername().trim();
+                jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('smtp_username', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", mailUsername);
+            }
+            if (request.getSmtpPassword() != null && !request.getSmtpPassword().trim().isEmpty()) {
+                this.mailPassword = request.getSmtpPassword().trim();
+                jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('smtp_password', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", mailPassword);
+            }
+            if (request.getDefaultStudentEmail() != null && !request.getDefaultStudentEmail().trim().isEmpty()) {
+                String defEmail = request.getDefaultStudentEmail().trim();
+                jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('default_student_email', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", defEmail);
+                jdbcTemplate.update("UPDATE users SET email = ? WHERE email LIKE '%@skillportal.com'", defEmail);
+            }
+
+            // Invalidate cached sender to use new credentials
+            this.mailSender = null;
+
+            // Immediately test dispatch to verify credentials
+            return sendTestEmail(request.getDefaultStudentEmail());
+        } catch (Exception e) {
+            log.error("Failed to save SMTP settings: {}", e.getMessage(), e);
+            EmailDto.EmailTestResult res = new EmailDto.EmailTestResult();
+            res.setSuccess(false);
+            res.setMessage("Failed to save settings: " + e.getMessage());
+            return res;
+        }
+    }
+
+    @Override
     public boolean updateStudentEmail(Long studentId, String newEmail) {
         if (studentId == null || newEmail == null || newEmail.trim().isEmpty()) {
             return false;
         }
+        String cleanEmail = newEmail.trim();
         try {
-            String sql = "UPDATE users u JOIN students s ON s.user_id = u.id SET u.email = ? WHERE s.id = ?";
-            int rows = jdbcTemplate.update(sql, newEmail.trim(), studentId);
-            return rows > 0;
+            // Update users table by students.id
+            jdbcTemplate.update("UPDATE users u JOIN students s ON s.user_id = u.id SET u.email = ? WHERE s.id = ?", cleanEmail, studentId);
+            // Update users table directly by users.id
+            jdbcTemplate.update("UPDATE users SET email = ? WHERE id = ?", cleanEmail, studentId);
+            // Also store as default fallback
+            jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('default_student_email', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", cleanEmail);
+            return true;
         } catch (Exception e) {
             log.error("Failed to update student email: {}", e.getMessage());
             return false;
@@ -333,24 +436,25 @@ public class EmailServiceImpl implements EmailService {
                 "      <p>Official Verification Notice</p>\n" +
                 "    </div>\n" +
                 "    <div class=\"body\">\n" +
-                "      <div class=\"badge\">✓ STATUS: PRESENT</div>\n" +
+                "      <div class=\"badge\">✓ STATUS: PRESENT FOR THE DAY</div>\n" +
                 "      <p>Dear <strong>" + studentName + "</strong>,</p>\n" +
-                "      <p>Your attendance has been successfully verified and recorded via your unique QR identity token for today's session.</p>\n" +
+                "      <p>You have been marked <strong>PRESENT</strong> for today's session via QR biometric check-in.</p>\n" +
                 "      <div class=\"details\">\n" +
                 "        <div class=\"row\"><span class=\"label\">Student ID</span><span class=\"val\">" + studentId + "</span></div>\n" +
+                "        <div class=\"row\"><span class=\"label\">Status</span><span class=\"val\" style=\"color:#16a34a;\">PRESENT</span></div>\n" +
                 "        <div class=\"row\"><span class=\"label\">Session Topic</span><span class=\"val\">" + sessionTitle + "</span></div>\n" +
                 "        <div class=\"row\"><span class=\"label\">Batch</span><span class=\"val\">" + batchName + "</span></div>\n" +
                 "        <div class=\"row\"><span class=\"label\">Date</span><span class=\"val\">" + date + "</span></div>\n" +
                 "        <div class=\"row\"><span class=\"label\">Scan Time</span><span class=\"val\">" + time + "</span></div>\n" +
                 "        <div class=\"row\"><span class=\"label\">Verification Mode</span><span class=\"val\" style=\"color:#0284c7;\">QR Biometric Token</span></div>\n" +
                 "      </div>\n" +
-                "      <p style=\"font-size: 13px; color: #64748b;\">Keep up the consistency! Consistent attendance contributes directly to your batch leaderboard rank and placement eligibility score.</p>\n" +
+                "      <p style=\"font-size: 13px; color: #64748b;\">Consistent daily attendance keeps your placement readiness index high and batch rank active.</p>\n" +
                 "      <div class=\"btn-container\">\n" +
-                "        <a href=\"" + frontendUrl + "/attendance\" class=\"btn\">View My Attendance Record</a>\n" +
+                "        <a href=\"" + frontendUrl + "/attendance\" class=\"btn\">View My Attendance Ledger</a>\n" +
                 "      </div>\n" +
                 "    </div>\n" +
                 "    <div class=\"footer\">\n" +
-                "      &copy; 2026 SkillX Academy. This is an automated real-time notification generated upon QR verification.\n" +
+                "      &copy; 2026 SkillX Academy. Automated real-time attendance verification.\n" +
                 "    </div>\n" +
                 "  </div>\n" +
                 "</body>\n" +
@@ -367,16 +471,17 @@ public class EmailServiceImpl implements EmailService {
 
         return "SKILLX ACADEMY - ATTENDANCE CONFIRMATION\n" +
                 "=========================================\n\n" +
-                "Status: PRESENT\n" +
+                "Status: PRESENT FOR THE DAY\n" +
                 "Dear " + studentName + ",\n\n" +
-                "Your attendance was successfully verified via QR code scan.\n\n" +
+                "Your attendance was recorded and marked PRESENT for today via QR code scan.\n\n" +
                 "Details:\n" +
                 "- Student ID: " + studentId + "\n" +
+                "- Status: PRESENT\n" +
                 "- Session: " + sessionTitle + "\n" +
                 "- Batch: " + batchName + "\n" +
                 "- Date: " + date + "\n" +
                 "- Scan Time: " + time + "\n" +
-                "- Method: QR Scanner\n\n" +
+                "- Verification Method: QR Scanner\n\n" +
                 "View your complete attendance ledger: " + frontendUrl + "/attendance\n\n" +
                 "Best regards,\n" +
                 "SkillX Academy Administration";

@@ -123,9 +123,13 @@ public class AttendanceService {
         String sessionTitle = "Classroom Session - " + dateStr;
 
         // 7. Real-time email notification to that particular student
-        if (emailService != null && student.email != null && !student.email.trim().isEmpty()) {
+        String targetEmail = (student.email != null && !student.email.trim().isEmpty() && !student.email.contains("@skillportal.com"))
+                ? student.email.trim()
+                : (emailService != null ? emailService.getDefaultStudentEmail() : "diggaviprajwal55@gmail.com");
+
+        if (emailService != null) {
             emailService.sendAttendanceMarkedEmail(
-                    student.email,
+                    targetEmail,
                     student.fullName,
                     student.studentIdNumber,
                     student.batchName,
@@ -141,7 +145,7 @@ public class AttendanceService {
                 notificationRepository.createNotification(
                         student.userId,
                         "Attendance Marked: Present",
-                        "Your attendance for " + sessionTitle + " was recorded via QR scan at " + timeStr + ". An email confirmation was sent to " + student.email + ".",
+                        "Your attendance for " + sessionTitle + " was recorded via QR scan at " + timeStr + ". An email confirmation was sent to " + targetEmail + ".",
                         "ATTENDANCE",
                         "/attendance"
                 );

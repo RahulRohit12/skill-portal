@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/admin/email")
-@Tag(name = "Admin Email Management", description = "Endpoints for diagnosing SMTP connection, sending test emails, and updating student recipient emails")
+@Tag(name = "Admin Email Management", description = "Endpoints for diagnosing SMTP connection, saving settings, sending test emails, and updating student recipient emails")
 @PreAuthorize("hasRole('ADMIN')")
 public class EmailController {
 
@@ -39,6 +39,18 @@ public class EmailController {
         }
     }
 
+    @PostMapping("/settings")
+    @Operation(summary = "Save SMTP credentials and default student email directly to runtime database")
+    public ResponseEntity<ApiResponse<EmailDto.EmailTestResult>> saveSettings(
+            @RequestBody EmailDto.SaveSettingsRequest request) {
+        EmailDto.EmailTestResult result = emailService.saveSmtpSettings(request);
+        if (result.isSuccess()) {
+            return ResponseEntity.ok(ApiResponse.success("SMTP configuration saved and verified successfully!", result));
+        } else {
+            return ResponseEntity.ok(ApiResponse.error("Configuration saved, but test delivery notice: " + result.getMessage(), result));
+        }
+    }
+
     @PostMapping("/update-student-email")
     @Operation(summary = "Update registered email address for a student so attendance notices reach their personal inbox")
     public ResponseEntity<ApiResponse<Void>> updateStudentEmail(
@@ -50,7 +62,7 @@ public class EmailController {
         if (updated) {
             return ResponseEntity.ok(ApiResponse.success("Student email updated to " + request.getEmail() + " successfully", null));
         } else {
-            return ResponseEntity.badRequest().body(ApiResponse.error("Could not find student with ID " + request.getStudentId()));
+            return ResponseEntity.badRequest().body(ApiResponse.error("Could not update student email"));
         }
     }
 }

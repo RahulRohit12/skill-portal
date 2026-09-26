@@ -33,7 +33,7 @@ class QrAttendanceServiceTest {
         student.userId = 2L;
         student.studentIdNumber = "STU-2026-001";
         student.fullName = "Shiva Kumar";
-        student.email = "student@skillportal.com";
+        student.email = "student.real@example.com";
         student.userStatus = "ACTIVE";
         student.batchId = 1L;
         student.batchName = "Java Full Stack 2026";
@@ -56,7 +56,7 @@ class QrAttendanceServiceTest {
         assertEquals("Shiva Kumar", response.getStudent().getFullName());
         verify(attendanceRepository, times(1)).recordQrAttendance(10L, 1L, 100L, "QR_SCAN", "Mobile Admin Scanner");
         verify(attendanceRepository, times(1)).logAudit(eq(1L), eq(100L), eq(10L), eq("QR-VALID-12345"), eq("SUCCESS"), any(), any(), any());
-        verify(emailService, times(1)).sendAttendanceMarkedEmail(eq("student@skillportal.com"), eq("Shiva Kumar"), eq("STU-2026-001"), eq("Java Full Stack 2026"), any(), any(), any());
+        verify(emailService, times(1)).sendAttendanceMarkedEmail(eq("student.real@example.com"), eq("Shiva Kumar"), eq("STU-2026-001"), eq("Java Full Stack 2026"), any(), any(), any());
     }
 
     @Test
