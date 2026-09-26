@@ -1,4 +1,5 @@
 // Assignment & Question Store with Persistent Hierarchy (Topics, Sub-topics, Coding Questions, Test Cases)
+import api from '../api/client';
 
 export interface TestCase {
   id: number;
@@ -774,7 +775,7 @@ class AssignmentStore {
     this.recalculateCounts();
   }
 
-  private save() {
+  public save() {
     try {
       localStorage.setItem(
         STORAGE_KEY,
@@ -812,11 +813,13 @@ class AssignmentStore {
   }
 
   public getTopics(assignmentId: number = 1): Topic[] {
-    return this.topics.filter((t) => t.assignmentId === assignmentId);
+    const list = this.topics.filter((t) => t.assignmentId === assignmentId);
+    return list.length > 0 ? list : this.topics;
   }
 
   public getSubTopics(assignmentId: number = 1): SubTopic[] {
-    return this.subTopics.filter((st) => st.assignmentId === assignmentId);
+    const list = this.subTopics.filter((st) => st.assignmentId === assignmentId);
+    return list.length > 0 ? list : this.subTopics;
   }
 
   public getSubTopicsByTopic(topicId: number): SubTopic[] {
@@ -967,6 +970,105 @@ class Solution {
       return q.bookmarked;
     }
     return false;
+  }
+
+  public syncWithBackend(assignmentId: number, backendData?: any) {
+    if (!backendData || !Array.isArray(backendData.sections)) return;
+
+    const sections = backendData.sections;
+    if (sections.length === 0) return;
+
+    const existingTopicsByTitle = new Map<string, Topic>();
+    this.topics.forEach((t) => existingTopicsByTitle.set(t.title.toLowerCase().trim(), t));
+
+    sections.forEach((sec: any) => {
+      const topicName = (sec.topicName || 'General').trim();
+      let topic = existingTopicsByTitle.get(topicName.toLowerCase());
+
+      if (!topic) {
+        const newTopicId = Date.now() + Math.floor(Math.random() * 1000);
+        topic = {
+          id: newTopicId,
+          assignmentId: sec.assignmentId || assignmentId,
+          title: topicName,
+          description: `Topic covering ${topicName}`,
+          orderIndex: this.topics.length + 1,
+        };
+        this.topics.push(topic);
+        existingTopicsByTitle.set(topicName.toLowerCase(), topic);
+      }
+
+      let subTopic = this.subTopics.find(
+        (st) => st.id === sec.id || (st.title.toLowerCase() === sec.title.toLowerCase() && st.topicId === topic!.id)
+      );
+
+      if (!subTopic) {
+        subTopic = {
+          id: sec.id,
+          topicId: topic.id,
+          assignmentId: sec.assignmentId || assignmentId,
+          sectionNumber: sec.sectionNumber || this.subTopics.length + 1,
+          title: sec.title,
+          description: sec.description || '',
+          questionCount: sec.questionCount || 0,
+          solvedCount: sec.solvedCount || 0,
+          totalMarks: sec.totalMarks || 0,
+          marksObtained: sec.marksObtained || 0,
+          locked: sec.locked || false,
+          status: sec.status === 'COMPLETED' ? 'COMPLETED' : sec.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'NOT_STARTED',
+        };
+        this.subTopics.push(subTopic);
+      } else {
+        subTopic.id = sec.id;
+        subTopic.topicId = topic.id;
+        if (sec.title) subTopic.title = sec.title;
+        if (sec.description) subTopic.description = sec.description;
+      }
+
+      if (Array.isArray(sec.questions)) {
+        sec.questions.forEach((q: any) => {
+          let existingQ = this.questions.find((x) => x.id === q.id);
+          if (!existingQ) {
+            this.questions.push({
+              id: q.id,
+              subTopicId: subTopic!.id,
+              title: q.title,
+              questionType: q.questionType || 'CODING',
+              difficulty: q.difficulty || 'EASY',
+              marks: q.marks || 10,
+              description: q.title,
+              inputFormat: 'Standard input',
+              outputFormat: 'Standard output',
+              constraints: '1 <= n <= 10^5',
+              starterCodeJava: `import java.util.Scanner;\n\nclass Solution {\n    public static void main(String[] args) {\n        Scanner scanner = new Scanner(System.in);\n        // Write solution here\n    }\n}`,
+              testCases: [
+                { id: 1, inputData: '1', expectedOutput: '1' }
+              ],
+              solved: q.status === 'SOLVED',
+              bookmarked: !!q.bookmarked,
+            });
+          }
+
+          if (q.status === 'SOLVED') {
+            this.solvedIds.add(q.id);
+          }
+        });
+      }
+    });
+
+    this.recalculateCounts();
+    this.save();
+  }
+
+  public async fetchFromBackend(assignmentId: number = 1): Promise<void> {
+    try {
+      const res = await api.get(`/assignments/${assignmentId}`);
+      if (res.data?.data) {
+        this.syncWithBackend(assignmentId, res.data.data);
+      }
+    } catch (err) {
+      console.warn('Backend sync fetch notice:', err);
+    }
   }
 }
 

@@ -297,6 +297,18 @@ class Solution {
           spread: 80,
           origin: { y: 0.6 },
         });
+
+        // Sync with backend database in real time so student points and dashboard leaderboard update immediately
+        api.post('/coding/record-solved', {
+          questionId,
+          marks: evalRes.marksAwarded || maxMarks,
+          assignmentId: assignmentId || 1,
+          code,
+          language: 'JAVA',
+          runtimeMs: evalRes.runtimeMs,
+        }).catch((err) => {
+          console.warn('Real-time leaderboard update notice:', err);
+        });
       }
 
       // Add to local history list

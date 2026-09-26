@@ -10,6 +10,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/coding")
@@ -36,6 +37,16 @@ public class CodingController {
             @Valid @RequestBody CodingDto.SubmitCodeRequest request) {
         CodingDto.SubmitCodeResponse response = codingService.submitCode(principal.getId(), request);
         return ResponseEntity.ok(ApiResponse.success("Submission evaluated", response));
+    }
+
+    @PostMapping("/record-solved")
+    @Operation(summary = "Record question solved and award points in real time to leaderboard")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> recordSolved(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestBody CodingDto.RecordSolvedRequest request) {
+        Long userId = principal != null ? principal.getId() : 1L;
+        codingService.recordSolved(userId, request);
+        return ResponseEntity.ok(ApiResponse.success("Question solved recorded and leaderboard updated", Map.of("solved", true)));
     }
 
     @GetMapping("/questions/{questionId}/submissions")

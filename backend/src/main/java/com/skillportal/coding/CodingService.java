@@ -1,5 +1,6 @@
 package com.skillportal.coding;
 
+import com.skillportal.dashboard.DashboardService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,10 +12,12 @@ public class CodingService {
 
     private final CodingRepository codingRepository;
     private final CodeExecutionEngine codeExecutionEngine;
+    private final DashboardService dashboardService;
 
-    public CodingService(CodingRepository codingRepository, CodeExecutionEngine codeExecutionEngine) {
+    public CodingService(CodingRepository codingRepository, CodeExecutionEngine codeExecutionEngine, DashboardService dashboardService) {
         this.codingRepository = codingRepository;
         this.codeExecutionEngine = codeExecutionEngine;
+        this.dashboardService = dashboardService;
     }
 
     public CodingDto.RunCodeResponse runCode(CodingDto.RunCodeRequest request) {
@@ -93,6 +96,7 @@ public class CodingService {
 
         if ("ACCEPTED".equals(execRes.getStatus())) {
             codingRepository.awardPointsAndLogProgress(userId, request.getQuestionId(), marksAwarded);
+            dashboardService.clearCache(null); // Invalidate leaderboard and dashboard cache across all users in real time
         }
 
         CodingDto.SubmitCodeResponse response = new CodingDto.SubmitCodeResponse();
@@ -107,6 +111,40 @@ public class CodingService {
         response.setTestCaseResults(execRes.getTestCaseResults());
 
         return response;
+    }
+
+    @Transactional
+    public void recordSolved(Long userId, CodingDto.RecordSolvedRequest req) {
+        Long questionId = req.getQuestionId();
+        if (questionId == null) return;
+        int marks = req.getMarks() > 0 ? req.getMarks() : codingRepository.getQuestionMarks(questionId);
+
+        boolean alreadySolved = codingRepository.isQuestionSolvedByUser(userId, questionId);
+
+        // Record question attempt as SOLVED
+        codingRepository.updateQuestionAttempt(userId, questionId, req.getAssignmentId(), "SOLVED", marks);
+
+        // Save submission record
+        codingRepository.saveSubmission(
+                userId,
+                questionId,
+                questionId,
+                req.getCode() != null ? req.getCode() : "// Solved via online execution",
+                req.getLanguage() != null ? req.getLanguage() : "JAVA",
+                "ACCEPTED",
+                1,
+                1,
+                req.getRuntimeMs() > 0 ? req.getRuntimeMs() : 120,
+                1024,
+                ""
+        );
+
+        if (!alreadySolved) {
+            codingRepository.awardPointsAndLogProgress(userId, questionId, marks);
+        }
+
+        // Bust leaderboard cache for all students so dashboard leaderboard updates immediately
+        dashboardService.clearCache(null);
     }
 
     public List<CodingDto.SubmissionHistoryItem> getSubmissionHistory(Long userId, Long questionId) {

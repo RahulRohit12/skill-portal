@@ -50,4 +50,23 @@ public class AssignmentController {
         AssignmentDto.SectionSummary section = assignmentService.getSectionById(sectionId, userId);
         return ResponseEntity.ok(ApiResponse.success(section));
     }
+
+    @PostMapping("/{id}/sections")
+    @Operation(summary = "Create a new assignment topic/sub-topic section")
+    public ResponseEntity<ApiResponse<AssignmentDto.SectionSummary>> createSection(
+            @PathVariable Long id,
+            @RequestBody AssignmentDto.CreateSectionRequest request) {
+        AssignmentDto.SectionSummary section = assignmentService.createSection(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Section created successfully", section));
+    }
+
+    @PostMapping("/{id}/sections/{sectionId}/questions/batch")
+    @Operation(summary = "Batch add coding questions to an assignment section (cross-device sync)")
+    public ResponseEntity<ApiResponse<List<AssignmentDto.QuestionSummary>>> createQuestionsForSection(
+            @PathVariable Long id,
+            @PathVariable Long sectionId,
+            @RequestBody List<AssignmentDto.CreateQuestionItem> questions) {
+        List<AssignmentDto.QuestionSummary> created = assignmentService.createQuestionsForSection(sectionId, questions);
+        return ResponseEntity.ok(ApiResponse.success("Questions added successfully", created));
+    }
 }

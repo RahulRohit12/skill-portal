@@ -22,15 +22,15 @@ public class CodingRepository {
 
     public List<CodeExecutionEngine.TestCaseItem> findTestCasesByProblemId(Long problemId, boolean includeHidden) {
         String sql = includeHidden ?
-                "SELECT id, input_data, expected_output, is_hidden FROM test_cases WHERE coding_problem_id = ? ORDER BY order_index ASC" :
-                "SELECT id, input_data, expected_output, is_hidden FROM test_cases WHERE coding_problem_id = ? AND is_hidden = FALSE ORDER BY order_index ASC";
+                "SELECT id, input_data, expected_output, is_hidden FROM test_cases WHERE coding_problem_id = ? OR coding_problem_id IN (SELECT id FROM coding_problems WHERE question_id = ?) ORDER BY order_index ASC" :
+                "SELECT id, input_data, expected_output, is_hidden FROM test_cases WHERE (coding_problem_id = ? OR coding_problem_id IN (SELECT id FROM coding_problems WHERE question_id = ?)) AND is_hidden = FALSE ORDER BY order_index ASC";
 
         return jdbcTemplate.query(sql, (rs, rowNum) -> new CodeExecutionEngine.TestCaseItem(
                 rs.getLong("id"),
                 rs.getString("input_data"),
                 rs.getString("expected_output"),
                 rs.getBoolean("is_hidden")
-        ), problemId);
+        ), problemId, problemId);
     }
 
     public Long saveSubmission(Long userId, Long problemId, Long questionId, String code, String language,
@@ -121,7 +121,31 @@ public class CodingRepository {
 
     public int getQuestionMarks(Long questionId) {
         String sql = "SELECT marks FROM questions WHERE id = ?";
-        Integer marks = jdbcTemplate.queryForObject(sql, Integer.class, questionId);
-        return marks != null ? marks : 10;
+        try {
+            Integer marks = jdbcTemplate.queryForObject(sql, Integer.class, questionId);
+            return marks != null ? marks : 10;
+        } catch (Exception e) {
+            return 10;
+        }
+    }
+
+    public boolean isQuestionSolvedByUser(Long userId, Long questionId) {
+        String sql = "SELECT COUNT(*) FROM question_attempts WHERE user_id = ? AND question_id = ? AND status = 'SOLVED'";
+        try {
+            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, userId, questionId);
+            return count != null && count > 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public int getStudentTotalPoints(Long userId) {
+        String sql = "SELECT total_points FROM students WHERE user_id = ?";
+        try {
+            Integer p = jdbcTemplate.queryForObject(sql, Integer.class, userId);
+            return p != null ? p : 0;
+        } catch (Exception e) {
+            return 0;
+        }
     }
 }

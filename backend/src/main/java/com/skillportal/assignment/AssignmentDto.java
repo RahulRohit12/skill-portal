@@ -102,6 +102,7 @@ public class AssignmentDto {
         private Long id;
         private Long assignmentId;
         private int sectionNumber;
+        private String topicName;
         private String title;
         private String description;
         private int questionCount;
@@ -120,6 +121,9 @@ public class AssignmentDto {
 
         public int getSectionNumber() { return sectionNumber; }
         public void setSectionNumber(int sectionNumber) { this.sectionNumber = sectionNumber; }
+
+        public String getTopicName() { return topicName != null && !topicName.trim().isEmpty() ? topicName : "General"; }
+        public void setTopicName(String topicName) { this.topicName = topicName; }
 
         public String getTitle() { return title; }
         public void setTitle(String title) { this.title = title; }
@@ -182,5 +186,78 @@ public class AssignmentDto {
 
         public boolean isBookmarked() { return bookmarked; }
         public void setBookmarked(boolean bookmarked) { this.bookmarked = bookmarked; }
+    }
+
+    public static class CreateSectionRequest {
+        private String topicName;
+        private String title;
+        private String description;
+
+        public String getTopicName() { return topicName; }
+        public void setTopicName(String topicName) { this.topicName = topicName; }
+
+        public String getTitle() { return title; }
+        public void setTitle(String title) { this.title = title; }
+
+        public String getDescription() { return description; }
+        public void setDescription(String description) { this.description = description; }
+    }
+
+    public static class CreateQuestionItem {
+        private String title;
+        private String difficulty; // EASY, MEDIUM, HARD
+        private int marks;
+        private String description;
+        private String inputFormat;
+        private String outputFormat;
+        private String constraints;
+        private String starterCodeJava;
+        private List<TestCaseItem> testCases;
+
+        public String getTitle() { return title; }
+        public void setTitle(String title) { this.title = title; }
+
+        public String getDifficulty() { return difficulty; }
+        public void setDifficulty(String difficulty) { this.difficulty = difficulty; }
+
+        public int getMarks() { return marks; }
+        public void setMarks(int marks) { this.marks = marks; }
+
+        public String getDescription() { return description; }
+        public void setDescription(String description) { this.description = description; }
+
+        public String getInputFormat() { return inputFormat; }
+        public void setInputFormat(String inputFormat) { this.inputFormat = inputFormat; }
+
+        public String getOutputFormat() { return outputFormat; }
+        public void setOutputFormat(String outputFormat) { this.outputFormat = outputFormat; }
+
+        public String getConstraints() { return constraints; }
+        public void setConstraints(String constraints) { this.constraints = constraints; }
+
+        public String getStarterCodeJava() { return starterCodeJava; }
+        public void setStarterCodeJava(String starterCodeJava) { this.starterCodeJava = starterCodeJava; }
+
+        public List<TestCaseItem> getTestCases() { return testCases; }
+        public void setTestCases(List<TestCaseItem> testCases) { this.testCases = testCases; }
+    }
+
+    public static class TestCaseItem {
+        private String inputData;
+        private String expectedOutput;
+        private boolean isHidden;
+        private String explanation;
+
+        public String getInputData() { return inputData; }
+        public void setInputData(String inputData) { this.inputData = inputData; }
+
+        public String getExpectedOutput() { return expectedOutput; }
+        public void setExpectedOutput(String expectedOutput) { this.expectedOutput = expectedOutput; }
+
+        public boolean isHidden() { return isHidden; }
+        public void setHidden(boolean hidden) { isHidden = hidden; }
+
+        public String getExplanation() { return explanation; }
+        public void setExplanation(String explanation) { this.explanation = explanation; }
     }
 }

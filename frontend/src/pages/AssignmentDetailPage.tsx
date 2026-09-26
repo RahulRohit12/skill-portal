@@ -90,15 +90,21 @@ export const AssignmentDetailPage: React.FC = () => {
     }
   };
 
-  const loadData = () => {
+  const loadData = async () => {
     if (!id) return;
-    api.get(`/assignments/${id}`)
-      .then((res) => {
-        const data = res.data.data;
-        setAssignment(data);
-      })
-      .catch((err) => console.warn('Backend assignment fetch notice:', err))
-      .finally(() => setLoading(false));
+    try {
+      const res = await api.get(`/assignments/${id}`);
+      const data = res.data.data;
+      setAssignment(data);
+      if (data) {
+        assignmentStore.syncWithBackend(assignmentIdNum, data);
+        refreshHierarchy();
+      }
+    } catch (err) {
+      console.warn('Backend assignment fetch notice:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -123,10 +129,23 @@ export const AssignmentDetailPage: React.FC = () => {
     refreshHierarchy();
   };
 
-  const handleCreateTopic = (e: React.FormEvent) => {
+  const handleCreateTopic = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTopicTitle.trim()) return;
-    const created = assignmentStore.addTopic(newTopicTitle.trim(), newTopicDesc.trim(), assignmentIdNum);
+    const titleVal = newTopicTitle.trim();
+    const descVal = newTopicDesc.trim();
+
+    try {
+      await api.post(`/assignments/${assignmentIdNum}/sections`, {
+        topicName: titleVal,
+        title: 'General',
+        description: descVal || `Topic covering ${titleVal}`,
+      });
+    } catch (err) {
+      console.warn('Backend sync notice:', err);
+    }
+
+    const created = assignmentStore.addTopic(titleVal, descVal, assignmentIdNum);
     refreshHierarchy();
     setExpandedTopicIds((prev) => new Set([...prev, created.id]));
     setNewTopicTitle('');
@@ -134,15 +153,39 @@ export const AssignmentDetailPage: React.FC = () => {
     setIsNewTopicPromptOpen(false);
   };
 
-  const handleCreateSubTopic = (e: React.FormEvent) => {
+  const handleCreateSubTopic = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubTopicTitle.trim()) return;
+    const titleVal = newSubTopicTitle.trim();
+    const descVal = newSubTopicDesc.trim();
+    const parentTopic = topics.find((t) => t.id === targetTopicIdForSubTopic);
+    const parentTopicTitle = parentTopic ? parentTopic.title : 'General';
+    let newSectionId: number | undefined;
+
+    try {
+      const res = await api.post(`/assignments/${assignmentIdNum}/sections`, {
+        topicName: parentTopicTitle,
+        title: titleVal,
+        description: descVal,
+      });
+      if (res.data?.data?.id) {
+        newSectionId = res.data.data.id;
+      }
+    } catch (err) {
+      console.warn('Backend sync notice:', err);
+    }
+
     const created = assignmentStore.addSubTopic(
-      newSubTopicTitle.trim(),
-      newSubTopicDesc.trim(),
+      titleVal,
+      descVal,
       assignmentIdNum,
       targetTopicIdForSubTopic
     );
+    if (newSectionId) {
+      created.id = newSectionId;
+      assignmentStore.save();
+    }
+
     refreshHierarchy();
     setSelectedSectionId(created.id);
     setExpandedTopicIds((prev) => new Set([...prev, targetTopicIdForSubTopic]));

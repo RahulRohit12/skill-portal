@@ -55,8 +55,8 @@ export const DashboardPage: React.FC = () => {
   const [heroSlide, setHeroSlide] = useState(0);
   const [showQrModal, setShowQrModal] = useState(false);
 
-  // Leaderboard data matching reference
-  const topStudents: LeaderboardItem[] = [
+  // Live Leaderboard data from backend database with fallback
+  const [topStudents, setTopStudents] = useState<LeaderboardItem[]>([
     { rank: 1, name: 'Pasupathi M', points: 9871, initial: 'P' },
     { rank: 2, name: 'Fakkirappa S', points: 9807, initial: 'F' },
     { rank: 3, name: 'Darshan Patil', points: 9803, initial: 'D' },
@@ -67,10 +67,36 @@ export const DashboardPage: React.FC = () => {
     { rank: 8, name: 'R Gopika Sri', points: 9574, initial: 'R' },
     { rank: 9, name: 'Supraja', points: 9569, initial: 'S' },
     { rank: 10, name: 'Nagulapally', points: 9505, initial: 'N' },
-  ];
+  ]);
 
   useEffect(() => {
-    // Single consolidated fetch for live personalized dashboard & statistics
+    // 1. Fetch live leaderboard updated in real time from coding submissions
+    api.get('/dashboard').then((dRes) => {
+      const top = dRes.data?.data?.leaderboard?.topStudents;
+      if (Array.isArray(top) && top.length > 0) {
+        const live: LeaderboardItem[] = top.map((item: any, idx: number) => ({
+          rank: item.rank || idx + 1,
+          name: item.name || 'Student',
+          points: item.points != null ? item.points : 0,
+          initial: (item.name || 'S').trim().charAt(0).toUpperCase(),
+        }));
+        if (live.length >= 3) {
+          setTopStudents(live);
+        } else {
+          setTopStudents((prev) => {
+            const merged = [...live];
+            for (let i = live.length; i < prev.length; i++) {
+              merged.push({ ...prev[i], rank: i + 1 });
+            }
+            return merged;
+          });
+        }
+      }
+    }).catch((err) => {
+      console.warn('Real-time leaderboard fetch notice:', err);
+    });
+
+    // 2. Fetch live personalized dashboard & statistics
     api.get('/student/dashboard').then((res) => {
       let map: Record<string, number> = {};
 

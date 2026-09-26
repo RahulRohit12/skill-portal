@@ -170,4 +170,31 @@ public class CodingDto {
         public String getSubmittedAt() { return submittedAt; }
         public void setSubmittedAt(String submittedAt) { this.submittedAt = submittedAt; }
     }
+
+    public static class RecordSolvedRequest {
+        private Long questionId;
+        private int marks;
+        private Long assignmentId;
+        private String code;
+        private String language;
+        private int runtimeMs;
+
+        public Long getQuestionId() { return questionId; }
+        public void setQuestionId(Long questionId) { this.questionId = questionId; }
+
+        public int getMarks() { return marks; }
+        public void setMarks(int marks) { this.marks = marks; }
+
+        public Long getAssignmentId() { return assignmentId; }
+        public void setAssignmentId(Long assignmentId) { this.assignmentId = assignmentId; }
+
+        public String getCode() { return code; }
+        public void setCode(String code) { this.code = code; }
+
+        public String getLanguage() { return language; }
+        public void setLanguage(String language) { this.language = language; }
+
+        public int getRuntimeMs() { return runtimeMs; }
+        public void setRuntimeMs(int runtimeMs) { this.runtimeMs = runtimeMs; }
+    }
 }

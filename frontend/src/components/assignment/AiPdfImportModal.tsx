@@ -29,6 +29,7 @@ import {
   SubTopic,
   AssignmentQuestion,
 } from '../../services/assignmentStore';
+import api from '../../api/client';
 
 interface AiPdfImportModalProps {
   topics: Topic[];
@@ -227,6 +228,32 @@ export const AiPdfImportModal: React.FC<AiPdfImportModalProps> = ({
         explanation: tc.explanation,
       })),
     }));
+
+    // Post to backend database for instant cross-device synchronization
+    const backendPayload = toImport.map((q) => ({
+      title: q.title,
+      difficulty: q.difficulty,
+      marks: q.marks || 10,
+      description: q.description,
+      inputFormat: q.inputFormat,
+      outputFormat: q.outputFormat,
+      constraints: q.constraints,
+      starterCodeJava: q.starterCodeJava,
+      testCases: q.testCases.map((tc) => ({
+        inputData: tc.inputData,
+        expectedOutput: tc.expectedOutput,
+        hidden: !!tc.isHidden,
+        explanation: tc.explanation || '',
+      })),
+    }));
+
+    api.post(`/assignments/${assignmentId}/sections/${selectedSubTopicId}/questions/batch`, backendPayload)
+      .then((res) => {
+        console.log('Batch questions synchronized to backend DB successfully:', res.data);
+      })
+      .catch((err) => {
+        console.warn('Backend batch question sync notice (fallback to local):', err);
+      });
 
     assignmentStore.addMultipleQuestions(payload);
     onQuestionsImported(toImport.length, selectedSubTopicId);

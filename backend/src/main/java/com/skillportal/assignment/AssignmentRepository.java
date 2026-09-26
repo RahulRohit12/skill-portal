@@ -2,8 +2,12 @@ package com.skillportal.assignment;
 
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
+import java.sql.PreparedStatement;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -39,7 +43,7 @@ public class AssignmentRepository {
         }
 
         // 1. Batch load all sections for all published assignments
-        String secSql = "SELECT s.id, s.assignment_id, s.section_number, s.title, s.description " +
+        String secSql = "SELECT s.id, s.assignment_id, s.section_number, s.topic_name, s.title, s.description " +
                         "FROM assignment_sections s " +
                         "JOIN assignments a ON s.assignment_id = a.id " +
                         "WHERE a.is_published = TRUE AND a.is_deleted = FALSE " +
@@ -50,6 +54,7 @@ public class AssignmentRepository {
             s.setId(rs.getLong("id"));
             s.setAssignmentId(rs.getLong("assignment_id"));
             s.setSectionNumber(rs.getInt("section_number"));
+            s.setTopicName(rs.getString("topic_name"));
             s.setTitle(rs.getString("title"));
             s.setDescription(rs.getString("description"));
             return s;
@@ -213,6 +218,7 @@ public class AssignmentRepository {
             s.setId(rs.getLong("id"));
             s.setAssignmentId(rs.getLong("assignment_id"));
             s.setSectionNumber(rs.getInt("section_number"));
+            s.setTopicName(rs.getString("topic_name"));
             s.setTitle(rs.getString("title"));
             s.setDescription(rs.getString("description"));
             s.setQuestions(new ArrayList<>());
@@ -325,6 +331,7 @@ public class AssignmentRepository {
                 sec.setId(rs.getLong("id"));
                 sec.setAssignmentId(rs.getLong("assignment_id"));
                 sec.setSectionNumber(rs.getInt("section_number"));
+                sec.setTopicName(rs.getString("topic_name"));
                 sec.setTitle(rs.getString("title"));
                 sec.setDescription(rs.getString("description"));
                 return sec;
@@ -342,5 +349,134 @@ public class AssignmentRepository {
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
         }
+    }
+
+    public AssignmentDto.SectionSummary createSection(Long assignmentId, String topicName, String title, String description) {
+        String numSql = "SELECT COALESCE(MAX(section_number), 0) + 1 FROM assignment_sections WHERE assignment_id = ?";
+        Integer nextSecNum = jdbcTemplate.queryForObject(numSql, Integer.class, assignmentId);
+        int sectionNum = nextSecNum != null ? nextSecNum : 1;
+
+        String insertSql = "INSERT INTO assignment_sections (assignment_id, section_number, topic_name, title, description, order_index) VALUES (?, ?, ?, ?, ?, ?)";
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        final String effectiveTopic = (topicName != null && !topicName.trim().isEmpty()) ? topicName.trim() : "General";
+        final String effectiveTitle = (title != null && !title.trim().isEmpty()) ? title.trim() : "New Topic";
+        final String effectiveDesc = description != null ? description : "";
+
+        jdbcTemplate.update(connection -> {
+            PreparedStatement ps = connection.prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS);
+            ps.setLong(1, assignmentId);
+            ps.setInt(2, sectionNum);
+            ps.setString(3, effectiveTopic);
+            ps.setString(4, effectiveTitle);
+            ps.setString(5, effectiveDesc);
+            ps.setInt(6, sectionNum);
+            return ps;
+        }, keyHolder);
+
+        Long secId = keyHolder.getKey() != null ? keyHolder.getKey().longValue() : null;
+
+        AssignmentDto.SectionSummary s = new AssignmentDto.SectionSummary();
+        s.setId(secId);
+        s.setAssignmentId(assignmentId);
+        s.setSectionNumber(sectionNum);
+        s.setTopicName(effectiveTopic);
+        s.setTitle(effectiveTitle);
+        s.setDescription(effectiveDesc);
+        s.setStatus("AVAILABLE");
+        s.setQuestions(new ArrayList<>());
+        return s;
+    }
+
+    public List<AssignmentDto.QuestionSummary> createQuestionsForSection(Long sectionId, List<AssignmentDto.CreateQuestionItem> items) {
+        String secSql = "SELECT assignment_id FROM assignment_sections WHERE id = ?";
+        Long assignmentId = jdbcTemplate.queryForObject(secSql, Long.class, sectionId);
+
+        String orderSql = "SELECT COALESCE(MAX(order_index), 0) FROM assignment_questions WHERE section_id = ?";
+        Integer maxOrder = jdbcTemplate.queryForObject(orderSql, Integer.class, sectionId);
+        int currentOrder = maxOrder != null ? maxOrder : 0;
+
+        List<AssignmentDto.QuestionSummary> createdList = new ArrayList<>();
+        int totalNewMarks = 0;
+
+        for (AssignmentDto.CreateQuestionItem item : items) {
+            currentOrder++;
+            int marks = item.getMarks() > 0 ? item.getMarks() : 10;
+            String difficulty = (item.getDifficulty() != null && !item.getDifficulty().isBlank()) ? item.getDifficulty().toUpperCase() : "EASY";
+
+            // 1. Insert into questions
+            String qSql = "INSERT INTO questions (title, description, question_type, difficulty, marks, is_active, current_version) VALUES (?, ?, 'CODING', ?, ?, TRUE, 1)";
+            KeyHolder qKeyHolder = new GeneratedKeyHolder();
+            final String qTitle = item.getTitle();
+            final String qDesc = item.getDescription() != null ? item.getDescription() : item.getTitle();
+            jdbcTemplate.update(connection -> {
+                PreparedStatement ps = connection.prepareStatement(qSql, Statement.RETURN_GENERATED_KEYS);
+                ps.setString(1, qTitle);
+                ps.setString(2, qDesc);
+                ps.setString(3, difficulty);
+                ps.setInt(4, marks);
+                return ps;
+            }, qKeyHolder);
+            Long questionId = qKeyHolder.getKey() != null ? qKeyHolder.getKey().longValue() : null;
+            if (questionId == null) continue;
+
+            // 2. Insert into coding_problems
+            String defaultStarter = "import java.util.Scanner;\n\nclass Solution {\n    public static void main(String[] args) {\n        Scanner scanner = new Scanner(System.in);\n        // Write solution here\n    }\n}";
+            String starter = (item.getStarterCodeJava() != null && !item.getStarterCodeJava().isBlank()) ? item.getStarterCodeJava() : defaultStarter;
+
+            String cpSql = "INSERT INTO coding_problems (question_id, problem_statement, input_format, output_format, constraints, starter_code_java, time_limit_ms, memory_limit_mb) VALUES (?, ?, ?, ?, ?, ?, 2000, 256)";
+            KeyHolder cpKeyHolder = new GeneratedKeyHolder();
+            jdbcTemplate.update(connection -> {
+                PreparedStatement ps = connection.prepareStatement(cpSql, Statement.RETURN_GENERATED_KEYS);
+                ps.setLong(1, questionId);
+                ps.setString(2, qDesc);
+                ps.setString(3, item.getInputFormat() != null ? item.getInputFormat() : "");
+                ps.setString(4, item.getOutputFormat() != null ? item.getOutputFormat() : "");
+                ps.setString(5, item.getConstraints() != null ? item.getConstraints() : "");
+                ps.setString(6, starter);
+                return ps;
+            }, cpKeyHolder);
+            Long codingProblemId = cpKeyHolder.getKey() != null ? cpKeyHolder.getKey().longValue() : questionId;
+
+            // 3. Insert test cases
+            if (item.getTestCases() != null && !item.getTestCases().isEmpty()) {
+                String tcSql = "INSERT INTO test_cases (coding_problem_id, input_data, expected_output, is_hidden, order_index) VALUES (?, ?, ?, ?, ?)";
+                int tcOrder = 1;
+                for (AssignmentDto.TestCaseItem tc : item.getTestCases()) {
+                    jdbcTemplate.update(tcSql, codingProblemId,
+                            tc.getInputData() != null ? tc.getInputData() : "",
+                            tc.getExpectedOutput() != null ? tc.getExpectedOutput() : "",
+                            tc.isHidden(),
+                            tcOrder++);
+                }
+            } else {
+                String tcSql = "INSERT INTO test_cases (coding_problem_id, input_data, expected_output, is_hidden, order_index) VALUES (?, '1', '1', FALSE, 1)";
+                jdbcTemplate.update(tcSql, codingProblemId);
+            }
+
+            // 4. Link into assignment_questions
+            String linkSql = "INSERT IGNORE INTO assignment_questions (section_id, question_id, order_index) VALUES (?, ?, ?)";
+            jdbcTemplate.update(linkSql, sectionId, questionId, currentOrder);
+
+            totalNewMarks += marks;
+
+            AssignmentDto.QuestionSummary summary = new AssignmentDto.QuestionSummary();
+            summary.setId(questionId);
+            summary.setTitle(item.getTitle());
+            summary.setQuestionType("CODING");
+            summary.setDifficulty(difficulty);
+            summary.setMarks(marks);
+            summary.setStatus("NOT_ATTEMPTED");
+            summary.setMarksObtained(0);
+            summary.setBookmarked(false);
+            createdList.add(summary);
+        }
+
+        // 5. Update assignment total_marks
+        if (assignmentId != null && totalNewMarks > 0) {
+            String updSql = "UPDATE assignments SET total_marks = total_marks + ? WHERE id = ?";
+            jdbcTemplate.update(updSql, totalNewMarks, assignmentId);
+        }
+
+        return createdList;
     }
 }
