@@ -44,13 +44,13 @@ public class EmailController {
     public ResponseEntity<ApiResponse<Void>> updateStudentEmail(
             @RequestBody EmailDto.UpdateStudentEmailRequest request) {
         if (request == null || request.getStudentId() == null || request.getEmail() == null) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("Student ID and new email are required", null));
+            return ResponseEntity.badRequest().body(ApiResponse.error("Student ID and new email are required"));
         }
         boolean updated = emailService.updateStudentEmail(request.getStudentId(), request.getEmail());
         if (updated) {
             return ResponseEntity.ok(ApiResponse.success("Student email updated to " + request.getEmail() + " successfully", null));
         } else {
-            return ResponseEntity.badRequest().body(ApiResponse.error("Could not find student with ID " + request.getStudentId(), null));
+            return ResponseEntity.badRequest().body(ApiResponse.error("Could not find student with ID " + request.getStudentId()));
         }
     }
 }
