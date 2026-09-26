@@ -31,9 +31,13 @@ export const AppShell: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#090b0e] text-slate-100 flex">
+    <div className="min-h-screen bg-[#07090e] text-slate-100 flex relative overflow-x-hidden">
+      {/* Ambient 3D Glow Orbs */}
+      <div className="fixed top-[-10%] left-[20%] w-[550px] h-[550px] rounded-full bg-cyan-500/[0.03] blur-[140px] pointer-events-none" />
+      <div className="fixed bottom-[-10%] right-[10%] w-[650px] h-[650px] rounded-full bg-sky-500/[0.03] blur-[160px] pointer-events-none" />
+
       {/* Mobile Top Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-[#0c0e12] border-b border-[#191c24] z-30 px-4 flex items-center justify-between">
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-[#0a0d14]/95 backdrop-blur-md border-b border-white/[0.08] z-30 px-4 flex items-center justify-between">
         <button
           onClick={() => setSidebarOpen(true)}
           className="p-1.5 text-slate-400 hover:text-white rounded-lg"
@@ -51,7 +55,7 @@ export const AppShell: React.FC = () => {
       <Sidebar isOpen={sidebarOpen} onCloseMobile={() => setSidebarOpen(false)} />
 
       {/* Main Workspace Frame */}
-      <div className="flex-1 lg:pl-60 min-w-0 flex flex-col min-h-screen pt-14 lg:pt-0">
+      <div className="flex-1 lg:pl-64 min-w-0 flex flex-col min-h-screen pt-14 lg:pt-0 relative z-10">
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
           <ErrorBoundary>
             <Outlet />
