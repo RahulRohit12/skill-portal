@@ -16,18 +16,29 @@ import { AttendanceCalendar } from '../components/attendance/AttendanceCalendar'
 import { StudentQrModal } from '../components/attendance/StudentQrModal';
 
 export const AttendancePage: React.FC = () => {
-  const [data, setData] = useState<AttendanceData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<AttendanceData | null>(() => {
+    try {
+      const cached = sessionStorage.getItem('sp_swr_/attendance::');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.data?.data) return parsed.data.data;
+      }
+    } catch {}
+    return null;
+  });
+  const [loading, setLoading] = useState(!data);
   const [showQrModal, setShowQrModal] = useState(false);
 
   useEffect(() => {
     api.get('/attendance')
-      .then((res) => setData(res.data.data))
+      .then((res) => {
+        if (res.data?.data) setData(res.data.data);
+      })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <LoadingSpinner fullPage message="Retrieving batch attendance registers..." />;
+  if (loading && !data) return <LoadingSpinner fullPage message="Retrieving batch attendance registers..." />;
   if (!data) return <div className="p-8 text-center text-sm text-slate-400">Attendance records not available.</div>;
 
   return (

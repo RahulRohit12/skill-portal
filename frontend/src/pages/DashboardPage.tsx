@@ -31,7 +31,7 @@ interface LeaderboardItem {
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Student metrics state
@@ -125,7 +125,7 @@ export const DashboardPage: React.FC = () => {
     );
   };
 
-  if (loading) {
+  if (loading && !studentStats) {
     return <LoadingSpinner fullPage message="Loading your student learning dashboard..." />;
   }
 
