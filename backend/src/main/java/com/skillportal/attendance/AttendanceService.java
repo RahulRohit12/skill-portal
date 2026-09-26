@@ -1,5 +1,7 @@
 package com.skillportal.attendance;
 
+import com.skillportal.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,7 +29,11 @@ public class AttendanceService {
 
     public AttendanceDto.MyQrCodeResponse getMyQrCode(Long userId) {
         return attendanceRepository.getMyQrCode(userId)
-                .orElseThrow(() -> new RuntimeException("Student profile not found for authenticated user."));
+                .orElseThrow(() -> new ApiException("Student profile not found for authenticated user.", HttpStatus.NOT_FOUND, "STUDENT_NOT_FOUND"));
+    }
+
+    public AttendanceDto.AttendanceMatrixResponse getAttendanceMatrix(Long userId, Long subjectId, String startDate, String endDate) {
+        return attendanceRepository.getAttendanceMatrix(userId, subjectId, startDate, endDate);
     }
 
     @Transactional

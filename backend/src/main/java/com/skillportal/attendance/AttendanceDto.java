@@ -3,6 +3,7 @@ package com.skillportal.attendance;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
+import java.util.Map;
 
 public class AttendanceDto {
 
@@ -364,5 +365,98 @@ public class AttendanceDto {
 
         public String getRemarks() { return remarks; }
         public void setRemarks(String remarks) { this.remarks = remarks; }
+    }
+
+    public static class AttendanceMatrixResponse {
+        private double overallPercentage;
+        private int totalClasses;
+        private int presentClasses;
+        private int absentClasses;
+        private Long selectedSubjectId;
+        private String selectedSubjectTitle;
+        private String startDate;
+        private String endDate;
+        private List<SubjectAttendanceStat> subjects;
+        private List<MonthAttendanceRow> months;
+
+        public double getOverallPercentage() { return overallPercentage; }
+        public void setOverallPercentage(double overallPercentage) { this.overallPercentage = overallPercentage; }
+
+        public int getTotalClasses() { return totalClasses; }
+        public void setTotalClasses(int totalClasses) { this.totalClasses = totalClasses; }
+
+        public int getPresentClasses() { return presentClasses; }
+        public void setPresentClasses(int presentClasses) { this.presentClasses = presentClasses; }
+
+        public int getAbsentClasses() { return absentClasses; }
+        public void setAbsentClasses(int absentClasses) { this.absentClasses = absentClasses; }
+
+        public Long getSelectedSubjectId() { return selectedSubjectId; }
+        public void setSelectedSubjectId(Long selectedSubjectId) { this.selectedSubjectId = selectedSubjectId; }
+
+        public String getSelectedSubjectTitle() { return selectedSubjectTitle; }
+        public void setSelectedSubjectTitle(String selectedSubjectTitle) { this.selectedSubjectTitle = selectedSubjectTitle; }
+
+        public String getStartDate() { return startDate; }
+        public void setStartDate(String startDate) { this.startDate = startDate; }
+
+        public String getEndDate() { return endDate; }
+        public void setEndDate(String endDate) { this.endDate = endDate; }
+
+        public List<SubjectAttendanceStat> getSubjects() { return subjects; }
+        public void setSubjects(List<SubjectAttendanceStat> subjects) { this.subjects = subjects; }
+
+        public List<MonthAttendanceRow> getMonths() { return months; }
+        public void setMonths(List<MonthAttendanceRow> months) { this.months = months; }
+    }
+
+    public static class MonthAttendanceRow {
+        private String monthName;
+        private int year;
+        private int month;
+        private Map<Integer, DayStatusItem> days;
+
+        public String getMonthName() { return monthName; }
+        public void setMonthName(String monthName) { this.monthName = monthName; }
+
+        public int getYear() { return year; }
+        public void setYear(int year) { this.year = year; }
+
+        public int getMonth() { return month; }
+        public void setMonth(int month) { this.month = month; }
+
+        public Map<Integer, DayStatusItem> getDays() { return days; }
+        public void setDays(Map<Integer, DayStatusItem> days) { this.days = days; }
+    }
+
+    public static class DayStatusItem {
+        private int dayNumber;
+        private String date;
+        private String status; // PRESENT, ABSENT, WEEK_OFF, NONE
+        private String sessionTitle;
+        private String subjectTitle;
+        private String source;
+        private String markedAt;
+
+        public int getDayNumber() { return dayNumber; }
+        public void setDayNumber(int dayNumber) { this.dayNumber = dayNumber; }
+
+        public String getDate() { return date; }
+        public void setDate(String date) { this.date = date; }
+
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
+
+        public String getSessionTitle() { return sessionTitle; }
+        public void setSessionTitle(String sessionTitle) { this.sessionTitle = sessionTitle; }
+
+        public String getSubjectTitle() { return subjectTitle; }
+        public void setSubjectTitle(String subjectTitle) { this.subjectTitle = subjectTitle; }
+
+        public String getSource() { return source; }
+        public void setSource(String source) { this.source = source; }
+
+        public String getMarkedAt() { return markedAt; }
+        public void setMarkedAt(String markedAt) { this.markedAt = markedAt; }
     }
 }

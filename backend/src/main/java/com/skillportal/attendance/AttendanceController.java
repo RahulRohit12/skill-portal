@@ -54,6 +54,17 @@ public class AttendanceController {
         return ResponseEntity.ok(ApiResponse.success(response.getMessage(), response));
     }
 
+    @GetMapping("/matrix")
+    @Operation(summary = "Student/Dashboard: Get multi-month horizontal attendance matrix with real QR scan stats")
+    public ResponseEntity<ApiResponse<AttendanceDto.AttendanceMatrixResponse>> getAttendanceMatrix(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(required = false) Long subjectId,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        AttendanceDto.AttendanceMatrixResponse response = attendanceService.getAttendanceMatrix(principal.getId(), subjectId, startDate, endDate);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     @GetMapping("/calendar")
     @Operation(summary = "Student: Get monthly date-by-date attendance calendar visualization")
     public ResponseEntity<ApiResponse<AttendanceDto.CalendarAttendanceResponse>> getCalendar(
