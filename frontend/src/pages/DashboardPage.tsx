@@ -20,6 +20,7 @@ import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { StudentQrModal } from '../components/attendance/StudentQrModal';
+import { DashboardAttendanceMatrix } from '../components/attendance/DashboardAttendanceMatrix';
 
 interface LeaderboardItem {
   rank: number;
@@ -102,73 +103,6 @@ export const DashboardPage: React.FC = () => {
       setLoading(false);
     });
   }, []);
-
-  // 12-Month GitHub-style Green Activity Grid
-  const renderContributionGrid = () => {
-    const months = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'];
-    const daysOfWeek = ['Mon', 'Wed', 'Fri'];
-
-    // Generate 52 weeks x 7 days
-    const weeks = [];
-    const today = new Date();
-
-    for (let w = 51; w >= 0; w--) {
-      const days = [];
-      for (let d = 0; d < 7; d++) {
-        const date = new Date(today);
-        date.setDate(today.getDate() - (w * 7 + (6 - d)));
-        const dateStr = date.toISOString().split('T')[0];
-        const count = heatmapData[dateStr] || 0;
-        days.push({ date: dateStr, count });
-      }
-      weeks.push(days);
-    }
-
-    const getTileColor = (count: number) => {
-      if (count === 0) return 'bg-[#14171f] border border-[#1b202a]';
-      if (count === 1) return 'bg-[#064e3b] border border-[#065f46]';
-      if (count === 2) return 'bg-[#15803d] border border-[#16a34a]';
-      if (count === 3) return 'bg-[#22c55e] border border-[#4ade80]';
-      return 'bg-[#4ade80] border border-[#86efac]';
-    };
-
-    return (
-      <div className="overflow-x-auto pb-2">
-        {/* Month labels header */}
-        <div className="flex text-[10px] text-slate-400 font-medium pl-7 justify-between mb-1.5 min-w-[640px]">
-          {months.map((m, idx) => (
-            <span key={idx}>{m}</span>
-          ))}
-        </div>
-
-        <div className="flex gap-1 min-w-[640px]">
-          {/* Day of week labels */}
-          <div className="flex flex-col justify-between text-[9px] text-slate-400 pr-2 py-0.5 select-none shrink-0 w-6">
-            <span>Mon</span>
-            <span>Wed</span>
-            <span>Fri</span>
-          </div>
-
-          {/* 52 Columns */}
-          <div className="flex gap-1 flex-1">
-            {weeks.map((week, wIdx) => (
-              <div key={wIdx} className="flex flex-col gap-1">
-                {week.map((day, dIdx) => (
-                  <div
-                    key={dIdx}
-                    title={`${day.date}: ${day.count} activities`}
-                    className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-[2px] transition-transform hover:scale-125 cursor-pointer ${getTileColor(
-                      day.count
-                    )}`}
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   // Helper to render Segmented progress dash bars
   const renderDashBar = (percentage: number) => {
@@ -399,78 +333,8 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 2: Practice Streak & Contribution Calendar */}
-          <div className="bg-[#12151c] border border-[#1e2330] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
-            <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-sm text-white">
-                Practice Streak
-              </h3>
-              <button
-                className="p-1.5 text-slate-400 hover:text-white transition-colors"
-                title="Share Streak"
-              >
-                <Share2 className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Streak Metrics Row */}
-            <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-[#1b202a]">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0">
-                  <Flame className="w-5 h-5 fill-amber-500" />
-                </div>
-                <div>
-                  <div className="text-xl font-black text-white leading-tight">
-                    {studentStats.currentStreak}
-                  </div>
-                  <span className="text-[11px] text-slate-400 font-medium">Current streak</span>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xl font-black text-white leading-tight">
-                  {studentStats.longestStreak}
-                </div>
-                <span className="text-[11px] text-slate-400 font-medium">Longest streak</span>
-              </div>
-
-              <div>
-                <div className="text-xl font-black text-white leading-tight">
-                  {studentStats.correctSubmissions}
-                </div>
-                <span className="text-[11px] text-slate-400 font-medium">Total Correct submissions</span>
-              </div>
-
-              <div className="px-2.5 py-1 rounded-lg bg-[#181c26] border border-[#222734] text-xs font-bold text-slate-200">
-                2026
-              </div>
-            </div>
-
-            {/* GitHub-style Green Activity Heatmap */}
-            {renderContributionGrid()}
-
-            {/* Heatmap Legend Footer */}
-            <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-400 pt-1">
-              <div className="flex items-center gap-3">
-                <span className="flex items-center gap-1.5 text-amber-400 font-medium">
-                  <span className="w-2 h-2 rounded-full bg-amber-400" />
-                  No practice yet today
-                </span>
-                <span>•</span>
-                <span className="underline cursor-pointer hover:text-slate-200">How we count</span>
-              </div>
-
-              <div className="flex items-center gap-1 text-[10px]">
-                <span>Less</span>
-                <div className="w-2.5 h-2.5 rounded-[2px] bg-[#14171f] border border-[#1b202a]" />
-                <div className="w-2.5 h-2.5 rounded-[2px] bg-[#064e3b]" />
-                <div className="w-2.5 h-2.5 rounded-[2px] bg-[#15803d]" />
-                <div className="w-2.5 h-2.5 rounded-[2px] bg-[#22c55e]" />
-                <div className="w-2.5 h-2.5 rounded-[2px] bg-[#4ade80]" />
-                <span>More</span>
-              </div>
-            </div>
-          </div>
+          {/* Card 2: Classroom Attendance Matrix (Replaces Practice Streak) */}
+          <DashboardAttendanceMatrix onOpenQrModal={() => setShowQrModal(true)} />
 
           {/* Bottom Sub-Cards: Placement Drives & Skills Acquired */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
