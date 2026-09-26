@@ -42,7 +42,7 @@ export const AppShell: React.FC = () => {
           <Menu className="w-5 h-5" />
         </button>
         <span className="font-black text-sm tracking-tight text-[#00c2ff]">
-          TAP ACADEMY
+          SkillX Academy
         </span>
         <div className="w-6" />
       </div>

@@ -104,7 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
               </div>
               <div className="flex flex-col">
                 <span className="font-black text-base tracking-tight text-[#00c2ff] leading-none">
-                  TAP ACADEMY
+                  SkillX Academy
                 </span>
                 <span className="text-[9px] text-slate-400 tracking-wider font-semibold uppercase mt-0.5">
                   Skill Portal

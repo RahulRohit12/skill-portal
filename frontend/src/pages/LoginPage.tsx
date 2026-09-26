@@ -63,7 +63,7 @@ export const LoginPage: React.FC = () => {
             ⚡
           </div>
           <h1 className="text-2xl font-black tracking-tight text-[#00c2ff]">
-            TAP ACADEMY
+            SkillX Academy
           </h1>
           <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider font-semibold">
             Skill Portal & Learning Platform
@@ -197,7 +197,7 @@ export const LoginPage: React.FC = () => {
 
         {/* Footer info */}
         <div className="text-center mt-6 text-[11px] text-slate-500">
-          TAP Academy LMS • High Performance Zero-JPA Stack
+          SkillX Academy LMS • High Performance Zero-JPA Stack
         </div>
       </div>
     </div>
