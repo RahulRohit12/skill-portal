@@ -45,9 +45,11 @@ export interface EvaluationResult {
  */
 function prepareJavaCode(rawCode: string): string {
   let code = rawCode.trim();
-  // Ensure public class Main or public class Solution is declared as non-public class Solution
-  code = code.replace(/public\s+class\s+Main\b/g, 'class Solution');
-  code = code.replace(/public\s+class\s+([A-Za-z0-9_]+)/g, 'class $1');
+  // Strip package declaration which causes file location issues in online single-file compiler
+  code = code.replace(/^\s*package\s+[^;]+;\s*/gm, '');
+  // Wandbox compiles code in prog.java, so top-level classes cannot be public unless named prog.
+  // Strip 'public' keyword before 'class' so class Main, class Solution, etc. compile cleanly.
+  code = code.replace(/\bpublic\s+class\s+/g, 'class ');
   return code;
 }
 

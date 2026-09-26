@@ -84,6 +84,7 @@ export const AiPdfImportModal: React.FC<AiPdfImportModalProps> = ({
   const [extractedQuestions, setExtractedQuestions] = useState<ExtractedQuestion[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
+  const [isImporting, setIsImporting] = useState(false);
 
   // Sub-topics available under currently selected Topic
   const availableSubTopics = subTopics.filter((st) => st.topicId === selectedTopicId);
@@ -96,25 +97,57 @@ export const AiPdfImportModal: React.FC<AiPdfImportModalProps> = ({
     }
   };
 
-  const handleCreateTopic = (e: React.FormEvent) => {
+  const handleCreateTopic = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTopicTitle.trim()) return;
-    const created = assignmentStore.addTopic(newTopicTitle.trim(), '', assignmentId);
+    const titleVal = newTopicTitle.trim();
+    try {
+      await api.post(`/assignments/${assignmentId}/sections`, {
+        topicName: titleVal,
+        title: 'General',
+        description: `Topic covering ${titleVal}`,
+      });
+    } catch (err) {
+      console.warn('Backend topic creation notice:', err);
+    }
+    const created = assignmentStore.addTopic(titleVal, '', assignmentId);
     onTopicAdded(created);
     setSelectedTopicId(created.id);
     setNewTopicTitle('');
     setShowNewTopicForm(false);
   };
 
-  const handleCreateSubTopic = (e: React.FormEvent) => {
+  const handleCreateSubTopic = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubTopicTitle.trim()) return;
+    const titleVal = newSubTopicTitle.trim();
+    const parentTopic = topics.find((t) => t.id === selectedTopicId);
+    const parentTopicTitle = parentTopic ? parentTopic.title : 'Programming';
+
+    let backendSecId: number | undefined;
+    try {
+      const res = await api.post(`/assignments/${assignmentId}/sections`, {
+        topicName: parentTopicTitle,
+        title: titleVal,
+        description: '',
+      });
+      if (res.data?.data?.id) {
+        backendSecId = res.data.data.id;
+      }
+    } catch (err) {
+      console.warn('Backend subtopic creation notice:', err);
+    }
+
     const created = assignmentStore.addSubTopic(
-      newSubTopicTitle.trim(),
+      titleVal,
       '',
       assignmentId,
       selectedTopicId
     );
+    if (backendSecId) {
+      created.id = backendSecId;
+      assignmentStore.save();
+    }
     onSubTopicAdded(created);
     setSelectedSubTopicId(created.id);
     setNewSubTopicTitle('');
@@ -203,12 +236,15 @@ export const AiPdfImportModal: React.FC<AiPdfImportModalProps> = ({
     setExtractedQuestions(updated);
   };
 
-  const handleImportAll = () => {
+  const handleImportAll = async () => {
     const toImport = extractedQuestions.filter((_, idx) => selectedIndices.has(idx));
     if (toImport.length === 0) {
       setParseError('Please select at least one question to import.');
       return;
     }
+
+    setIsImporting(true);
+    setParseError(null);
 
     const payload = toImport.map((q) => ({
       subTopicId: selectedSubTopicId,
@@ -247,15 +283,49 @@ export const AiPdfImportModal: React.FC<AiPdfImportModalProps> = ({
       })),
     }));
 
-    api.post(`/assignments/${assignmentId}/sections/${selectedSubTopicId}/questions/batch`, backendPayload)
-      .then((res) => {
-        console.log('Batch questions synchronized to backend DB successfully:', res.data);
-      })
-      .catch((err) => {
-        console.warn('Backend batch question sync notice (fallback to local):', err);
-      });
+    let createdBackendQuestions: any[] = [];
+    try {
+      const res = await api.post(`/assignments/${assignmentId}/sections/${selectedSubTopicId}/questions/batch`, backendPayload);
+      if (res.data?.data && Array.isArray(res.data.data)) {
+        createdBackendQuestions = res.data.data;
+      }
+    } catch (err) {
+      console.warn('Backend batch question sync notice (fallback to local):', err);
+    }
 
-    assignmentStore.addMultipleQuestions(payload);
+    if (createdBackendQuestions.length > 0) {
+      const questionsWithDbIds = createdBackendQuestions.map((cq) => ({
+        subTopicId: selectedSubTopicId,
+        title: cq.title,
+        difficulty: cq.difficulty,
+        marks: cq.marks || 10,
+        description: cq.description || cq.title,
+        inputFormat: cq.inputFormat || '',
+        outputFormat: cq.outputFormat || '',
+        constraints: cq.constraints || '',
+        starterCodeJava: cq.starterCodeJava || '',
+        testCases: (cq.testCases && cq.testCases.length > 0 ? cq.testCases : [
+          { id: 1, inputData: '1', expectedOutput: '1' }
+        ]).map((tc: any, idx: number) => ({
+          id: tc.id || idx + 1,
+          inputData: tc.inputData,
+          expectedOutput: tc.expectedOutput,
+          isHidden: !!tc.hidden || !!tc.isHidden,
+          explanation: tc.explanation || '',
+        })),
+      }));
+      const added = assignmentStore.addMultipleQuestions(questionsWithDbIds);
+      added.forEach((a, i) => {
+        if (createdBackendQuestions[i]?.id) {
+          a.id = createdBackendQuestions[i].id;
+        }
+      });
+      assignmentStore.save();
+    } else {
+      assignmentStore.addMultipleQuestions(payload);
+    }
+
+    setIsImporting(false);
     onQuestionsImported(toImport.length, selectedSubTopicId);
     onClose();
   };
@@ -798,14 +868,23 @@ Problem 2: Subarray with Target Sum
             </button>
             <button
               type="button"
-              disabled={extractedQuestions.length === 0 || selectedIndices.size === 0}
+              disabled={extractedQuestions.length === 0 || selectedIndices.size === 0 || isImporting}
               onClick={handleImportAll}
-              className="px-6 py-2.5 rounded-xl bg-[#00c2ff] hover:bg-[#38bdf8] text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition-all"
+              className="px-6 py-2.5 rounded-xl bg-[#00c2ff] hover:bg-[#38bdf8] text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition-all cursor-pointer"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>
-                Import {selectedIndices.size} Question{selectedIndices.size > 1 ? 's' : ''} Automatically
-              </span>
+              {isImporting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                  <span>Syncing to Cloud & Database...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>
+                    Import {selectedIndices.size} Question{selectedIndices.size > 1 ? 's' : ''} Automatically
+                  </span>
+                </>
+              )}
             </button>
           </div>
         </div>

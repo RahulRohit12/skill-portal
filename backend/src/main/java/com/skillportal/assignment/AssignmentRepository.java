@@ -233,12 +233,14 @@ public class AssignmentRepository {
         String qSql;
         Object[] qParams;
         if (userId != null) {
-            qSql = "SELECT aq.section_id, q.id, q.title, q.question_type, q.difficulty, q.marks, " +
+            qSql = "SELECT aq.section_id, q.id, q.title, q.description, q.question_type, q.difficulty, q.marks, " +
+                   "cp.id AS coding_problem_id, cp.problem_statement, cp.input_format, cp.output_format, cp.constraints, cp.starter_code_java, " +
                    "qa.status AS attempt_status, qa.marks_obtained, " +
                    "(CASE WHEN bm.id IS NOT NULL THEN 1 ELSE 0 END) AS is_bm " +
                    "FROM assignment_questions aq " +
                    "JOIN questions q ON aq.question_id = q.id " +
                    "JOIN assignment_sections s ON aq.section_id = s.id " +
+                   "LEFT JOIN coding_problems cp ON cp.question_id = q.id " +
                    "LEFT JOIN (" +
                    "    SELECT qa1.question_id, qa1.status, qa1.marks_obtained " +
                    "    FROM question_attempts qa1 " +
@@ -254,15 +256,37 @@ public class AssignmentRepository {
                    "ORDER BY s.section_number ASC, aq.order_index ASC";
             qParams = new Object[]{userId, userId, assignmentId};
         } else {
-            qSql = "SELECT aq.section_id, q.id, q.title, q.question_type, q.difficulty, q.marks, " +
+            qSql = "SELECT aq.section_id, q.id, q.title, q.description, q.question_type, q.difficulty, q.marks, " +
+                   "cp.id AS coding_problem_id, cp.problem_statement, cp.input_format, cp.output_format, cp.constraints, cp.starter_code_java, " +
                    "'NOT_ATTEMPTED' AS attempt_status, 0 AS marks_obtained, 0 AS is_bm " +
                    "FROM assignment_questions aq " +
                    "JOIN questions q ON aq.question_id = q.id " +
                    "JOIN assignment_sections s ON aq.section_id = s.id " +
+                   "LEFT JOIN coding_problems cp ON cp.question_id = q.id " +
                    "WHERE s.assignment_id = ? " +
                    "ORDER BY s.section_number ASC, aq.order_index ASC";
             qParams = new Object[]{assignmentId};
         }
+
+        // Batch load all test cases for this assignment's coding problems
+        String tcSql = "SELECT tc.coding_problem_id, tc.input_data, tc.expected_output, tc.is_hidden, tc.order_index " +
+                       "FROM test_cases tc " +
+                       "JOIN coding_problems cp ON tc.coding_problem_id = cp.id " +
+                       "JOIN assignment_questions aq ON aq.question_id = cp.question_id " +
+                       "JOIN assignment_sections s ON aq.section_id = s.id " +
+                       "WHERE s.assignment_id = ? " +
+                       "ORDER BY tc.coding_problem_id ASC, tc.order_index ASC";
+        Map<Long, List<AssignmentDto.TestCaseItem>> testCasesByCpId = new HashMap<>();
+        try {
+            jdbcTemplate.query(tcSql, rs -> {
+                Long cpId = rs.getLong("coding_problem_id");
+                AssignmentDto.TestCaseItem tc = new AssignmentDto.TestCaseItem();
+                tc.setInputData(rs.getString("input_data"));
+                tc.setExpectedOutput(rs.getString("expected_output"));
+                tc.setHidden(rs.getBoolean("is_hidden"));
+                testCasesByCpId.computeIfAbsent(cpId, k -> new ArrayList<>()).add(tc);
+            }, assignmentId);
+        } catch (Exception ignored) {}
 
         Map<Long, List<AssignmentDto.QuestionSummary>> questionsBySectionId = new HashMap<>();
         jdbcTemplate.query(qSql, rs -> {
@@ -276,6 +300,21 @@ public class AssignmentRepository {
             q.setStatus(attStatus != null ? attStatus : "NOT_ATTEMPTED");
             q.setMarksObtained(rs.getInt("marks_obtained"));
             q.setBookmarked(rs.getInt("is_bm") > 0);
+
+            // Populate rich coding problem details
+            String probStmt = rs.getString("problem_statement");
+            q.setDescription(probStmt != null && !probStmt.isBlank() ? probStmt : rs.getString("description"));
+            q.setInputFormat(rs.getString("input_format"));
+            q.setOutputFormat(rs.getString("output_format"));
+            q.setConstraints(rs.getString("constraints"));
+            q.setStarterCodeJava(rs.getString("starter_code_java"));
+
+            Long cpId = rs.getObject("coding_problem_id") != null ? rs.getLong("coding_problem_id") : null;
+            if (cpId != null && testCasesByCpId.containsKey(cpId)) {
+                q.setTestCases(testCasesByCpId.get(cpId));
+            } else {
+                q.setTestCases(new ArrayList<>());
+            }
 
             Long secId = rs.getLong("section_id");
             questionsBySectionId.computeIfAbsent(secId, k -> new ArrayList<>()).add(q);
@@ -352,15 +391,39 @@ public class AssignmentRepository {
     }
 
     public AssignmentDto.SectionSummary createSection(Long assignmentId, String topicName, String title, String description) {
+        final String effectiveTopic = (topicName != null && !topicName.trim().isEmpty()) ? topicName.trim() : "General";
+        final String effectiveTitle = (title != null && !title.trim().isEmpty()) ? title.trim() : "New Topic";
+        final String effectiveDesc = description != null ? description : "";
+
+        // Return existing section if already created to prevent duplicates
+        String existSql = "SELECT id, section_number FROM assignment_sections WHERE assignment_id = ? AND topic_name = ? AND title = ? LIMIT 1";
+        try {
+            AssignmentDto.SectionSummary existing = jdbcTemplate.queryForObject(existSql, (rs, rowNum) -> {
+                AssignmentDto.SectionSummary sec = new AssignmentDto.SectionSummary();
+                sec.setId(rs.getLong("id"));
+                sec.setSectionNumber(rs.getInt("section_number"));
+                return sec;
+            }, assignmentId, effectiveTopic, effectiveTitle);
+
+            if (existing != null) {
+                jdbcTemplate.update("UPDATE assignment_sections SET topic_name = ?, description = ? WHERE id = ?",
+                        effectiveTopic, effectiveDesc, existing.getId());
+                existing.setAssignmentId(assignmentId);
+                existing.setTopicName(effectiveTopic);
+                existing.setTitle(effectiveTitle);
+                existing.setDescription(effectiveDesc);
+                existing.setStatus("AVAILABLE");
+                existing.setQuestions(new ArrayList<>());
+                return existing;
+            }
+        } catch (EmptyResultDataAccessException ignored) {}
+
         String numSql = "SELECT COALESCE(MAX(section_number), 0) + 1 FROM assignment_sections WHERE assignment_id = ?";
         Integer nextSecNum = jdbcTemplate.queryForObject(numSql, Integer.class, assignmentId);
         int sectionNum = nextSecNum != null ? nextSecNum : 1;
 
         String insertSql = "INSERT INTO assignment_sections (assignment_id, section_number, topic_name, title, description, order_index) VALUES (?, ?, ?, ?, ?, ?)";
         KeyHolder keyHolder = new GeneratedKeyHolder();
-        final String effectiveTopic = (topicName != null && !topicName.trim().isEmpty()) ? topicName.trim() : "General";
-        final String effectiveTitle = (title != null && !title.trim().isEmpty()) ? title.trim() : "New Topic";
-        final String effectiveDesc = description != null ? description : "";
 
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS);
@@ -388,11 +451,33 @@ public class AssignmentRepository {
     }
 
     public List<AssignmentDto.QuestionSummary> createQuestionsForSection(Long sectionId, List<AssignmentDto.CreateQuestionItem> items) {
-        String secSql = "SELECT assignment_id FROM assignment_sections WHERE id = ?";
-        Long assignmentId = jdbcTemplate.queryForObject(secSql, Long.class, sectionId);
+        Long targetSectionId = sectionId;
+        Long assignmentId = null;
+
+        if (sectionId != null) {
+            String secSql = "SELECT assignment_id FROM assignment_sections WHERE id = ?";
+            try {
+                assignmentId = jdbcTemplate.queryForObject(secSql, Long.class, sectionId);
+            } catch (EmptyResultDataAccessException e) {
+                targetSectionId = null;
+            }
+        }
+
+        if (targetSectionId == null) {
+            String fallbackSql = "SELECT id, assignment_id FROM assignment_sections WHERE assignment_id = 1 ORDER BY id ASC LIMIT 1";
+            try {
+                Map<String, Object> map = jdbcTemplate.queryForMap(fallbackSql);
+                targetSectionId = ((Number) map.get("id")).longValue();
+                assignmentId = ((Number) map.get("assignment_id")).longValue();
+            } catch (EmptyResultDataAccessException ex) {
+                AssignmentDto.SectionSummary newSec = createSection(1L, "Programming", "General Programming", "Default section");
+                targetSectionId = newSec.getId();
+                assignmentId = 1L;
+            }
+        }
 
         String orderSql = "SELECT COALESCE(MAX(order_index), 0) FROM assignment_questions WHERE section_id = ?";
-        Integer maxOrder = jdbcTemplate.queryForObject(orderSql, Integer.class, sectionId);
+        Integer maxOrder = jdbcTemplate.queryForObject(orderSql, Integer.class, targetSectionId);
         int currentOrder = maxOrder != null ? maxOrder : 0;
 
         List<AssignmentDto.QuestionSummary> createdList = new ArrayList<>();
@@ -407,7 +492,8 @@ public class AssignmentRepository {
             String qSql = "INSERT INTO questions (title, description, question_type, difficulty, marks, is_active, current_version) VALUES (?, ?, 'CODING', ?, ?, TRUE, 1)";
             KeyHolder qKeyHolder = new GeneratedKeyHolder();
             final String qTitle = item.getTitle();
-            final String qDesc = item.getDescription() != null ? item.getDescription() : item.getTitle();
+            final String qDesc = (item.getDescription() != null && !item.getDescription().isBlank()) ? item.getDescription() : item.getTitle();
+
             jdbcTemplate.update(connection -> {
                 PreparedStatement ps = connection.prepareStatement(qSql, Statement.RETURN_GENERATED_KEYS);
                 ps.setString(1, qTitle);
@@ -416,6 +502,7 @@ public class AssignmentRepository {
                 ps.setInt(4, marks);
                 return ps;
             }, qKeyHolder);
+
             Long questionId = qKeyHolder.getKey() != null ? qKeyHolder.getKey().longValue() : null;
             if (questionId == null) continue;
 
@@ -435,9 +522,11 @@ public class AssignmentRepository {
                 ps.setString(6, starter);
                 return ps;
             }, cpKeyHolder);
+
             Long codingProblemId = cpKeyHolder.getKey() != null ? cpKeyHolder.getKey().longValue() : questionId;
 
             // 3. Insert test cases
+            List<AssignmentDto.TestCaseItem> savedTestCases = new ArrayList<>();
             if (item.getTestCases() != null && !item.getTestCases().isEmpty()) {
                 String tcSql = "INSERT INTO test_cases (coding_problem_id, input_data, expected_output, is_hidden, order_index) VALUES (?, ?, ?, ?, ?)";
                 int tcOrder = 1;
@@ -447,15 +536,21 @@ public class AssignmentRepository {
                             tc.getExpectedOutput() != null ? tc.getExpectedOutput() : "",
                             tc.isHidden(),
                             tcOrder++);
+                    savedTestCases.add(tc);
                 }
             } else {
                 String tcSql = "INSERT INTO test_cases (coding_problem_id, input_data, expected_output, is_hidden, order_index) VALUES (?, '1', '1', FALSE, 1)";
                 jdbcTemplate.update(tcSql, codingProblemId);
+                AssignmentDto.TestCaseItem defaultTc = new AssignmentDto.TestCaseItem();
+                defaultTc.setInputData("1");
+                defaultTc.setExpectedOutput("1");
+                defaultTc.setHidden(false);
+                savedTestCases.add(defaultTc);
             }
 
             // 4. Link into assignment_questions
             String linkSql = "INSERT IGNORE INTO assignment_questions (section_id, question_id, order_index) VALUES (?, ?, ?)";
-            jdbcTemplate.update(linkSql, sectionId, questionId, currentOrder);
+            jdbcTemplate.update(linkSql, targetSectionId, questionId, currentOrder);
 
             totalNewMarks += marks;
 
@@ -468,6 +563,12 @@ public class AssignmentRepository {
             summary.setStatus("NOT_ATTEMPTED");
             summary.setMarksObtained(0);
             summary.setBookmarked(false);
+            summary.setDescription(qDesc);
+            summary.setInputFormat(item.getInputFormat());
+            summary.setOutputFormat(item.getOutputFormat());
+            summary.setConstraints(item.getConstraints());
+            summary.setStarterCodeJava(starter);
+            summary.setTestCases(savedTestCases);
             createdList.add(summary);
         }
 

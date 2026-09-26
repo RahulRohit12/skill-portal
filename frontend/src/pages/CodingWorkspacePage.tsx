@@ -96,59 +96,92 @@ class Solution {
     setRunResult(null);
     setSubmitResult(null);
 
-    // 1. Check local assignmentStore first for real question with test cases
-    const storeQ = assignmentStore.getQuestionById(questionId);
-    if (storeQ) {
-      setProblem({
-        id: storeQ.id,
-        title: storeQ.title,
-        slug: storeQ.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-        description: storeQ.description,
-        inputFormat: storeQ.inputFormat,
-        outputFormat: storeQ.outputFormat,
-        constraints: storeQ.constraints,
-        difficulty: storeQ.difficulty,
-        timeLimitMs: 2000,
-        memoryLimitMb: 256,
-        starterCodeJava: storeQ.starterCodeJava,
-        starterCodePython: '# Java compiler enabled for this problem',
-        starterCodeJs: '// Java compiler enabled for this problem',
-        sampleTestCases: storeQ.testCases.map((tc, idx) => ({
-          id: tc.id || idx + 1,
-          orderIndex: idx + 1,
-          inputData: tc.inputData,
-          expectedOutput: tc.expectedOutput,
-          explanation: tc.explanation || `Test case ${idx + 1}`,
-        })),
-      });
-      setCode(storeQ.starterCodeJava || '');
-      setBookmarked(storeQ.bookmarked || false);
-      setSelectedCaseIdx(0);
-      setLoading(false);
-      return;
-    }
+    const initQuestion = async () => {
+      // 1. Check local assignmentStore first
+      let storeQ = assignmentStore.getQuestionById(questionId);
 
-    // 2. Fallback to API if not in assignmentStore
-    api.get(`/questions/${questionId}`)
-      .then((res) => {
-        const p = res.data.data.codingProblem;
+      // If not present in local store, fetch from backend assignment to sync latest questions
+      if (!storeQ) {
+        await assignmentStore.fetchFromBackend(assignmentId || 1);
+        storeQ = assignmentStore.getQuestionById(questionId);
+      }
+
+      if (storeQ) {
+        setProblem({
+          id: storeQ.id,
+          title: storeQ.title,
+          slug: storeQ.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          description: storeQ.description,
+          inputFormat: storeQ.inputFormat,
+          outputFormat: storeQ.outputFormat,
+          constraints: storeQ.constraints,
+          difficulty: storeQ.difficulty,
+          timeLimitMs: 2000,
+          memoryLimitMb: 256,
+          starterCodeJava: storeQ.starterCodeJava,
+          starterCodePython: '# Java compiler enabled for this problem',
+          starterCodeJs: '// Java compiler enabled for this problem',
+          sampleTestCases: storeQ.testCases.map((tc, idx) => ({
+            id: tc.id || idx + 1,
+            orderIndex: idx + 1,
+            inputData: tc.inputData,
+            expectedOutput: tc.expectedOutput,
+            explanation: tc.explanation || `Test case ${idx + 1}`,
+          })),
+        });
+        setCode(storeQ.starterCodeJava || '');
+        setBookmarked(storeQ.bookmarked || false);
+        setSelectedCaseIdx(0);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Direct Question API Fallback
+      try {
+        const res = await api.get(`/questions/${questionId}`);
+        const qData = res.data?.data;
+        const p = qData?.codingProblem;
         if (p) {
-          setProblem(p);
+          const sampleCases = p.sampleCases || [];
+          setProblem({
+            id: qData.id || questionId,
+            title: qData.title || 'Coding Problem',
+            slug: (qData.title || 'coding-problem').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+            description: p.problemStatement || qData.description || '',
+            inputFormat: p.inputFormat || '',
+            outputFormat: p.outputFormat || '',
+            constraints: p.constraints || '',
+            difficulty: qData.difficulty || 'MEDIUM',
+            timeLimitMs: p.timeLimitMs || 2000,
+            memoryLimitMb: p.memoryLimitMb || 256,
+            starterCodeJava: p.starterCodeJava || '',
+            starterCodePython: p.starterCodePython || '',
+            starterCodeJs: p.starterCodeJs || '',
+            sampleTestCases: sampleCases.map((tc: any, idx: number) => ({
+              id: tc.id || idx + 1,
+              orderIndex: tc.orderIndex || idx + 1,
+              inputData: tc.inputData,
+              expectedOutput: tc.expectedOutput,
+              explanation: `Sample test case ${idx + 1}`,
+            })),
+          });
           setCode(p.starterCodeJava || fallbackProblem.starterCodeJava || '');
         } else {
           setProblem(fallbackProblem);
           setCode(fallbackProblem.starterCodeJava || '');
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         console.warn('Using fallback problem', err);
         setProblem(fallbackProblem);
         setCode(fallbackProblem.starterCodeJava || '');
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    initQuestion();
     loadHistory();
-  }, [questionId]);
+  }, [questionId, assignmentId]);
 
   const loadHistory = () => {
     api.get(`/coding/questions/${questionId}/submissions`)

@@ -70,11 +70,19 @@ public class CodingRepository {
     public void awardPointsAndLogProgress(Long userId, Long questionId, int marks) {
         // Increment student profile total_points
         String pointSql = "UPDATE students SET total_points = total_points + ? WHERE user_id = ?";
-        jdbcTemplate.update(pointSql, marks, userId);
+        int updated = jdbcTemplate.update(pointSql, marks, userId);
+        if (updated == 0) {
+            String insertSql = "INSERT INTO students (user_id, student_id_number, total_points) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE total_points = total_points + ?";
+            try {
+                jdbcTemplate.update(insertSql, userId, "SX-" + userId, marks, marks);
+            } catch (Exception ignored) {}
+        }
 
         // Record progress event
         String progressSql = "INSERT INTO progress_events (user_id, event_type, reference_id, details) VALUES (?, 'QUESTION_SOLVED', ?, ?)";
-        jdbcTemplate.update(progressSql, userId, questionId, "Solved coding problem for question " + questionId + " (" + marks + " pts)");
+        try {
+            jdbcTemplate.update(progressSql, userId, questionId, "Solved coding problem for question " + questionId + " (" + marks + " pts)");
+        } catch (Exception ignored) {}
     }
 
     public List<CodingDto.SubmissionHistoryItem> findSubmissions(Long userId, Long questionId) {

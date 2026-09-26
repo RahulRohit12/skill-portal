@@ -85,6 +85,12 @@ export const AssignmentDetailPage: React.FC = () => {
     setTopics([...freshTopics]);
     setSubTopics([...freshSubTopics]);
 
+    setExpandedTopicIds((prev) => {
+      const next = new Set(prev);
+      freshTopics.forEach((t) => next.add(t.id));
+      return next;
+    });
+
     if (freshSubTopics.length > 0 && !freshSubTopics.some((st) => st.id === selectedSectionId)) {
       setSelectedSectionId(freshSubTopics[0].id);
     }
@@ -728,6 +734,7 @@ export const AssignmentDetailPage: React.FC = () => {
             setSelectedSectionId(targetSubId);
             setImportNotification(`Successfully imported ${count} questions with automated test cases!`);
             confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+            loadData();
           }}
           onTopicAdded={(newT) => {
             refreshHierarchy();
@@ -750,6 +757,7 @@ export const AssignmentDetailPage: React.FC = () => {
           onQuestionAdded={(newQ) => {
             refreshHierarchy();
             setSelectedSectionId(newQ.subTopicId);
+            loadData();
           }}
           onSubTopicAdded={(newSt) => {
             refreshHierarchy();

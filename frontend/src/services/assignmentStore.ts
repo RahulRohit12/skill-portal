@@ -49,7 +49,7 @@ export interface SubTopic {
   status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
 }
 
-const STORAGE_KEY = 'sp_assignment_hierarchy_v3';
+const STORAGE_KEY = 'sp_assignment_hierarchy_v4';
 const SOLVED_KEY = 'sp_solved_questions_v3';
 
 // Default Topics for "Programming"
@@ -753,9 +753,33 @@ class AssignmentStore {
         this.subTopics = parsed.subTopics || DEFAULT_SUBTOPICS;
         this.questions = parsed.questions || DEFAULT_QUESTIONS;
       } else {
-        this.topics = DEFAULT_TOPICS;
-        this.subTopics = DEFAULT_SUBTOPICS;
-        this.questions = DEFAULT_QUESTIONS;
+        const oldStored = localStorage.getItem('sp_assignment_hierarchy_v3');
+        if (oldStored) {
+          try {
+            const oldParsed = JSON.parse(oldStored);
+            const customSubTopics = (oldParsed.subTopics || []).filter(
+              (st: any) => !DEFAULT_SUBTOPICS.some((dst) => dst.id === st.id || dst.title.toLowerCase().trim() === st.title.toLowerCase().trim())
+            );
+            const customQuestions = (oldParsed.questions || []).filter(
+              (q: any) => !DEFAULT_QUESTIONS.some((dq) => dq.id === q.id || dq.title.toLowerCase().trim() === q.title.toLowerCase().trim())
+            );
+            const customTopics = (oldParsed.topics || []).filter(
+              (t: any) => !DEFAULT_TOPICS.some((dt) => dt.id === t.id || dt.title.toLowerCase().trim() === t.title.toLowerCase().trim())
+            );
+
+            this.topics = [...DEFAULT_TOPICS, ...customTopics];
+            this.subTopics = [...DEFAULT_SUBTOPICS, ...customSubTopics];
+            this.questions = [...DEFAULT_QUESTIONS, ...customQuestions];
+          } catch {
+            this.topics = [...DEFAULT_TOPICS];
+            this.subTopics = [...DEFAULT_SUBTOPICS];
+            this.questions = [...DEFAULT_QUESTIONS];
+          }
+        } else {
+          this.topics = [...DEFAULT_TOPICS];
+          this.subTopics = [...DEFAULT_SUBTOPICS];
+          this.questions = [...DEFAULT_QUESTIONS];
+        }
         this.save();
       }
 
@@ -767,9 +791,9 @@ class AssignmentStore {
         this.solvedIds = new Set([101, 102, 103, 104, 105, 106, 201]);
       }
     } catch {
-      this.topics = DEFAULT_TOPICS;
-      this.subTopics = DEFAULT_SUBTOPICS;
-      this.questions = DEFAULT_QUESTIONS;
+      this.topics = [...DEFAULT_TOPICS];
+      this.subTopics = [...DEFAULT_SUBTOPICS];
+      this.questions = [...DEFAULT_QUESTIONS];
       this.solvedIds = new Set([101, 102, 103, 104, 105, 106, 201]);
     }
     this.recalculateCounts();
@@ -982,7 +1006,7 @@ class Solution {
     this.topics.forEach((t) => existingTopicsByTitle.set(t.title.toLowerCase().trim(), t));
 
     sections.forEach((sec: any) => {
-      const topicName = (sec.topicName || 'General').trim();
+      const topicName = (sec.topicName || 'Programming').trim();
       let topic = existingTopicsByTitle.get(topicName.toLowerCase());
 
       if (!topic) {
@@ -998,9 +1022,15 @@ class Solution {
         existingTopicsByTitle.set(topicName.toLowerCase(), topic);
       }
 
+      // Match subtopic by title first
       let subTopic = this.subTopics.find(
-        (st) => st.id === sec.id || (st.title.toLowerCase() === sec.title.toLowerCase() && st.topicId === topic!.id)
+        (st) => st.title.trim().toLowerCase() === sec.title.trim().toLowerCase()
       );
+
+      // Or match by ID if this subtopic was already assigned sec.id
+      if (!subTopic) {
+        subTopic = this.subTopics.find((st) => st.id === sec.id);
+      }
 
       if (!subTopic) {
         subTopic = {
@@ -1019,15 +1049,41 @@ class Solution {
         };
         this.subTopics.push(subTopic);
       } else {
+        const oldId = subTopic.id;
         subTopic.id = sec.id;
         subTopic.topicId = topic.id;
         if (sec.title) subTopic.title = sec.title;
         if (sec.description) subTopic.description = sec.description;
+
+        // If subTopic id changed, remap all existing local questions pointing to oldId
+        if (oldId !== sec.id) {
+          this.questions.forEach((q) => {
+            if (q.subTopicId === oldId) {
+              q.subTopicId = sec.id;
+            }
+          });
+        }
       }
 
       if (Array.isArray(sec.questions)) {
         sec.questions.forEach((q: any) => {
-          let existingQ = this.questions.find((x) => x.id === q.id);
+          let existingQ = this.questions.find(
+            (x) => x.id === q.id || x.title.trim().toLowerCase() === q.title.trim().toLowerCase()
+          );
+
+          const rawTestCases = Array.isArray(q.testCases) && q.testCases.length > 0 ? q.testCases : null;
+          const formattedTestCases: TestCase[] = rawTestCases
+            ? rawTestCases.map((tc: any, idx: number) => ({
+                id: tc.id || idx + 1,
+                inputData: tc.inputData || '',
+                expectedOutput: (tc.expectedOutput || '').trim(),
+                isHidden: !!tc.hidden || !!tc.isHidden,
+                explanation: tc.explanation || '',
+              }))
+            : [
+                { id: 1, inputData: '1', expectedOutput: '1' }
+              ];
+
           if (!existingQ) {
             this.questions.push({
               id: q.id,
@@ -1036,17 +1092,28 @@ class Solution {
               questionType: q.questionType || 'CODING',
               difficulty: q.difficulty || 'EASY',
               marks: q.marks || 10,
-              description: q.title,
-              inputFormat: 'Standard input',
-              outputFormat: 'Standard output',
-              constraints: '1 <= n <= 10^5',
-              starterCodeJava: `import java.util.Scanner;\n\nclass Solution {\n    public static void main(String[] args) {\n        Scanner scanner = new Scanner(System.in);\n        // Write solution here\n    }\n}`,
-              testCases: [
-                { id: 1, inputData: '1', expectedOutput: '1' }
-              ],
+              description: q.description || q.title,
+              inputFormat: q.inputFormat || 'Standard input',
+              outputFormat: q.outputFormat || 'Standard output',
+              constraints: q.constraints || '1 <= n <= 10^5',
+              starterCodeJava: q.starterCodeJava || `import java.util.Scanner;\n\nclass Solution {\n    public static void main(String[] args) {\n        Scanner scanner = new Scanner(System.in);\n        // Write solution here\n    }\n}`,
+              testCases: formattedTestCases,
               solved: q.status === 'SOLVED',
               bookmarked: !!q.bookmarked,
             });
+          } else {
+            existingQ.id = q.id;
+            existingQ.subTopicId = subTopic!.id;
+            if (q.title) existingQ.title = q.title;
+            if (q.difficulty) existingQ.difficulty = q.difficulty;
+            if (q.marks) existingQ.marks = q.marks;
+            if (q.description) existingQ.description = q.description;
+            if (q.inputFormat) existingQ.inputFormat = q.inputFormat;
+            if (q.outputFormat) existingQ.outputFormat = q.outputFormat;
+            if (q.constraints) existingQ.constraints = q.constraints;
+            if (q.starterCodeJava) existingQ.starterCodeJava = q.starterCodeJava;
+            if (rawTestCases) existingQ.testCases = formattedTestCases;
+            if (q.status === 'SOLVED') existingQ.solved = true;
           }
 
           if (q.status === 'SOLVED') {

@@ -186,6 +186,31 @@ public class AssignmentDto {
 
         public boolean isBookmarked() { return bookmarked; }
         public void setBookmarked(boolean bookmarked) { this.bookmarked = bookmarked; }
+
+        private String description;
+        private String inputFormat;
+        private String outputFormat;
+        private String constraints;
+        private String starterCodeJava;
+        private List<TestCaseItem> testCases;
+
+        public String getDescription() { return description; }
+        public void setDescription(String description) { this.description = description; }
+
+        public String getInputFormat() { return inputFormat; }
+        public void setInputFormat(String inputFormat) { this.inputFormat = inputFormat; }
+
+        public String getOutputFormat() { return outputFormat; }
+        public void setOutputFormat(String outputFormat) { this.outputFormat = outputFormat; }
+
+        public String getConstraints() { return constraints; }
+        public void setConstraints(String constraints) { this.constraints = constraints; }
+
+        public String getStarterCodeJava() { return starterCodeJava; }
+        public void setStarterCodeJava(String starterCodeJava) { this.starterCodeJava = starterCodeJava; }
+
+        public List<TestCaseItem> getTestCases() { return testCases; }
+        public void setTestCases(List<TestCaseItem> testCases) { this.testCases = testCases; }
     }
 
     public static class CreateSectionRequest {

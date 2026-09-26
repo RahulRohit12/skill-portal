@@ -11,6 +11,7 @@ import {
   Lightbulb
 } from 'lucide-react';
 import { assignmentStore, SubTopic, AssignmentQuestion } from '../../services/assignmentStore';
+import api from '../../api/client';
 
 interface AddQuestionModalProps {
   subTopics: SubTopic[];
@@ -227,10 +228,31 @@ class Solution {
     setTestCases(updated);
   };
 
-  const handleCreateNewSubTopic = (e: React.FormEvent) => {
+  const handleCreateNewSubTopic = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubTopicTitle.trim()) return;
-    const newSt = assignmentStore.addSubTopic(newSubTopicTitle, newSubTopicDesc, assignmentId);
+    const titleVal = newSubTopicTitle.trim();
+    const descVal = newSubTopicDesc.trim();
+
+    let backendSecId: number | undefined;
+    try {
+      const res = await api.post(`/assignments/${assignmentId}/sections`, {
+        topicName: 'Programming',
+        title: titleVal,
+        description: descVal,
+      });
+      if (res.data?.data?.id) {
+        backendSecId = res.data.data.id;
+      }
+    } catch (err) {
+      console.warn('Backend section creation notice:', err);
+    }
+
+    const newSt = assignmentStore.addSubTopic(titleVal, descVal, assignmentId);
+    if (backendSecId) {
+      newSt.id = backendSecId;
+      assignmentStore.save();
+    }
     onSubTopicAdded(newSt);
     setSelectedSubTopicId(newSt.id);
     setIsCreatingSubTopic(false);
@@ -238,7 +260,7 @@ class Solution {
     setNewSubTopicDesc('');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -255,6 +277,46 @@ class Solution {
       return;
     }
 
+    const formattedTestCases = testCases.map((tc, idx) => ({
+      id: idx + 1,
+      inputData: tc.inputData,
+      expectedOutput: tc.expectedOutput.trim(),
+      isHidden: !!tc.isHidden,
+    }));
+
+    // Post to backend database so it persists across all devices
+    const backendQuestionPayload = [
+      {
+        title: title.trim(),
+        difficulty,
+        marks: Number(marks) || 10,
+        description: description.trim(),
+        inputFormat,
+        outputFormat,
+        constraints,
+        starterCodeJava,
+        testCases: formattedTestCases.map((tc) => ({
+          inputData: tc.inputData,
+          expectedOutput: tc.expectedOutput,
+          hidden: tc.isHidden,
+          explanation: '',
+        })),
+      },
+    ];
+
+    let backendQId: number | undefined;
+    try {
+      const res = await api.post(
+        `/assignments/${assignmentId}/sections/${selectedSubTopicId}/questions/batch`,
+        backendQuestionPayload
+      );
+      if (res.data?.data && res.data.data.length > 0) {
+        backendQId = res.data.data[0].id;
+      }
+    } catch (err) {
+      console.warn('Backend question save notice:', err);
+    }
+
     const created = assignmentStore.addQuestion({
       subTopicId: selectedSubTopicId,
       title: title.trim(),
@@ -265,13 +327,13 @@ class Solution {
       outputFormat,
       constraints,
       starterCodeJava,
-      testCases: testCases.map((tc, idx) => ({
-        id: idx + 1,
-        inputData: tc.inputData,
-        expectedOutput: tc.expectedOutput.trim(),
-        isHidden: tc.isHidden,
-      })),
+      testCases: formattedTestCases,
     });
+
+    if (backendQId) {
+      created.id = backendQId;
+      assignmentStore.save();
+    }
 
     onQuestionAdded(created);
     onClose();
