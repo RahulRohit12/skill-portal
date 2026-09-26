@@ -29,12 +29,14 @@ import {
 import api from '../api/client';
 import { CodingProblemDetail, RunCodeResult, SubmitCodeResult } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { assignmentStore, AssignmentQuestion } from '../services/assignmentStore';
+import { executeJavaCode, evaluateAllTestCases, TestCaseItem } from '../services/compilerService';
 
 export const CodingWorkspacePage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const problemId = Number(searchParams.get('problemId')) || 1;
-  const questionId = Number(searchParams.get('questionId')) || 2;
+  const questionId = Number(searchParams.get('questionId')) || 101;
   const assignmentId = searchParams.get('assignmentId') ? Number(searchParams.get('assignmentId')) : null;
 
   const [problem, setProblem] = useState<CodingProblemDetail | null>(null);
@@ -57,54 +59,76 @@ export const CodingWorkspacePage: React.FC = () => {
   const [submitResult, setSubmitResult] = useState<SubmitCodeResult | null>(null);
   const [bookmarked, setBookmarked] = useState(false);
 
-  // Fallback problem details matching screenshot media_1790007954367.png
+  // Fallback problem details
   const fallbackProblem: CodingProblemDetail = {
-    id: 1,
+    id: 101,
     title: 'Add 2 Integers',
     slug: 'add-2-integers',
-    description: 'Write a program to add two integer numbers.',
-    inputFormat: 'First Line contain single integer m Second line contain single integer n',
-    outputFormat: 'Print sum of both the integers m and n',
+    description: 'Write a Java program to read two integers m and n from standard input and print their sum.',
+    inputFormat: 'First line contains integer m. Second line contains integer n.',
+    outputFormat: 'Print the sum of both the integers m and n.',
     constraints: '-10^9 <= m, n <= 10^9',
     difficulty: 'EASY',
-    timeLimitMs: 1000,
+    timeLimitMs: 2000,
     memoryLimitMb: 256,
-    starterCodeJava: `import java.util.*;
+    starterCodeJava: `import java.util.Scanner;
 
-public class Main {
+class Solution {
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
-        
-        // Write your code here
         int m = scanner.nextInt();
         int n = scanner.nextInt();
-        System.out.print(m + n);
+        
+        // Print sum of m and n
+        System.out.println(m + n);
     }
 }`,
-    starterCodePython: `import sys
-
-# Write your code here
-lines = sys.stdin.read().split()
-if len(lines) >= 2:
-    m = int(lines[0])
-    n = int(lines[1])
-    print(m + n)`,
-    starterCodeJs: `const fs = require('fs');
-
-const input = fs.readFileSync('/dev/stdin', 'utf-8').trim().split(/\\s+/);
-if (input.length >= 2) {
-    const m = parseInt(input[0], 10);
-    const n = parseInt(input[1], 10);
-    console.log(m + n);
-}`,
+    starterCodePython: `import sys\nlines = sys.stdin.read().split()\nif len(lines) >= 2:\n    print(int(lines[0]) + int(lines[1]))`,
+    starterCodeJs: `const fs = require('fs');\nconst input = fs.readFileSync(0, 'utf-8').trim().split(/\\s+/);\nif (input.length >= 2) {\n    console.log(parseInt(input[0]) + parseInt(input[1]));\n}`,
     sampleTestCases: [
-      { id: 1, orderIndex: 1, inputData: '5\n10', expectedOutput: '15', explanation: '5 + 10 = 15' },
-      { id: 2, orderIndex: 2, inputData: '20\n30', expectedOutput: '50', explanation: '20 + 30 = 50' },
+      { id: 1, orderIndex: 1, inputData: '5\n10\n', expectedOutput: '15', explanation: '5 + 10 = 15' },
+      { id: 2, orderIndex: 2, inputData: '20\n30\n', expectedOutput: '50', explanation: '20 + 30 = 50' },
     ],
   };
 
   useEffect(() => {
     setLoading(true);
+    setRunResult(null);
+    setSubmitResult(null);
+
+    // 1. Check local assignmentStore first for real question with test cases
+    const storeQ = assignmentStore.getQuestionById(questionId);
+    if (storeQ) {
+      setProblem({
+        id: storeQ.id,
+        title: storeQ.title,
+        slug: storeQ.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        description: storeQ.description,
+        inputFormat: storeQ.inputFormat,
+        outputFormat: storeQ.outputFormat,
+        constraints: storeQ.constraints,
+        difficulty: storeQ.difficulty,
+        timeLimitMs: 2000,
+        memoryLimitMb: 256,
+        starterCodeJava: storeQ.starterCodeJava,
+        starterCodePython: '# Java compiler enabled for this problem',
+        starterCodeJs: '// Java compiler enabled for this problem',
+        sampleTestCases: storeQ.testCases.map((tc, idx) => ({
+          id: tc.id || idx + 1,
+          orderIndex: idx + 1,
+          inputData: tc.inputData,
+          expectedOutput: tc.expectedOutput,
+          explanation: tc.explanation || `Test case ${idx + 1}`,
+        })),
+      });
+      setCode(storeQ.starterCodeJava || '');
+      setBookmarked(storeQ.bookmarked || false);
+      setSelectedCaseIdx(0);
+      setLoading(false);
+      return;
+    }
+
+    // 2. Fallback to API if not in assignmentStore
     api.get(`/questions/${questionId}`)
       .then((res) => {
         const p = res.data.data.codingProblem;
@@ -141,21 +165,67 @@ if (input.length >= 2) {
   };
 
   const resetCode = () => {
-    handleLanguageChange(language);
+    const storeQ = assignmentStore.getQuestionById(questionId);
+    if (storeQ) {
+      setCode(storeQ.starterCodeJava || '');
+    } else {
+      handleLanguageChange(language);
+    }
   };
 
+  // Real Java Online Compilation via Wandbox OpenJDK 21
   const handleRunCode = async () => {
     setRunning(true);
     setActiveConsoleTab('result');
     setSubmitResult(null);
+
     try {
-      const res = await api.post('/coding/run', {
-        problemId: problem?.id || problemId,
-        language: language.toUpperCase(),
-        code: code,
-        customInput: activeConsoleTab === 'custom' ? customInput : null,
+      let stdin = '';
+      let expected = '';
+      if (activeConsoleTab === 'custom') {
+        stdin = customInput;
+      } else {
+        const selected = sampleCases[selectedCaseIdx];
+        stdin = selected?.inputData || '';
+        expected = selected?.expectedOutput || '';
+      }
+
+      // Execute with real Wandbox OpenJDK 21 compiler
+      const res = await executeJavaCode(code, stdin);
+
+      const actualTrimmed = (res.stdout || '').trim();
+      const expectedTrimmed = (expected || '').trim();
+      const isMatch =
+        activeConsoleTab === 'custom'
+          ? res.success
+          : res.success && (!expectedTrimmed || actualTrimmed === expectedTrimmed);
+
+      const runStatus =
+        res.compileError && !res.stdout
+          ? 'COMPILATION_ERROR'
+          : isMatch
+          ? 'ACCEPTED'
+          : 'WRONG_ANSWER';
+
+      setRunResult({
+        status: runStatus,
+        passedCount: isMatch ? 1 : 0,
+        totalCount: 1,
+        runtimeMs: res.runtimeMs,
+        memoryKb: 256,
+        compileOutput: res.compileError || (res.stderr && !res.stdout ? res.stderr : undefined),
+        testCaseResults: [
+          {
+            testCaseId: selectedCaseIdx + 1,
+            passed: isMatch,
+            input: stdin,
+            expectedOutput: expectedTrimmed || '(Custom Run Output)',
+            actualOutput: res.stdout || res.stderr || '(No output returned)',
+            runtimeMs: res.runtimeMs,
+            hidden: false,
+          },
+        ],
       });
-      setRunResult(res.data.data);
     } catch (err: any) {
       setRunResult({
         status: 'EXECUTION_ERROR',
@@ -163,35 +233,95 @@ if (input.length >= 2) {
         totalCount: 0,
         runtimeMs: 0,
         memoryKb: 0,
-        compileOutput: err.response?.data?.message || 'Execution error encountered.',
+        compileOutput: err.message || 'Execution error encountered.',
       });
     } finally {
       setRunning(false);
     }
   };
 
+  // Real Multi-Case Test Suite Evaluation via Wandbox OpenJDK 21
   const handleSubmitCode = async () => {
     setSubmitting(true);
     setActiveConsoleTab('result');
     setRunResult(null);
+
     try {
-      const res = await api.post('/coding/submissions', {
-        problemId: problem?.id || problemId,
-        questionId: questionId,
-        language: language.toUpperCase(),
-        code: code,
-        assignmentId: assignmentId,
-      });
-      const data = res.data.data;
-      setSubmitResult(data);
-      if (data.status === 'ACCEPTED') {
+      const q = assignmentStore.getQuestionById(questionId);
+      const testCasesToEvaluate: TestCaseItem[] =
+        q?.testCases?.map((tc) => ({
+          id: tc.id,
+          inputData: tc.inputData,
+          expectedOutput: tc.expectedOutput,
+          isHidden: tc.isHidden,
+          explanation: tc.explanation,
+        })) ||
+        activeProblem.sampleTestCases?.map((tc) => ({
+          id: tc.id,
+          inputData: tc.inputData,
+          expectedOutput: tc.expectedOutput,
+          isHidden: false,
+        })) || [
+          { inputData: '5\n10\n', expectedOutput: '15' },
+        ];
+
+      const maxMarks = q?.marks || 10;
+      const evalRes = await evaluateAllTestCases(code, testCasesToEvaluate, maxMarks);
+
+      const submitData: SubmitCodeResult = {
+        submissionId: Date.now(),
+        status: evalRes.status,
+        passedTestCases: evalRes.passedTestCases,
+        totalTestCases: evalRes.totalTestCases,
+        runtimeMs: evalRes.runtimeMs,
+        memoryKb: 256,
+        marksAwarded: evalRes.marksAwarded,
+        compileOutput: evalRes.compileOutput,
+        testCaseResults: evalRes.testCaseResults.map((tc) => ({
+          testCaseId: tc.testCaseIndex,
+          passed: tc.passed,
+          input: tc.input,
+          hidden: tc.isHidden,
+          runtimeMs: tc.runtimeMs,
+          actualOutput: tc.actualOutput,
+          expectedOutput: tc.expectedOutput,
+        })),
+      };
+
+      setSubmitResult(submitData);
+
+      if (evalRes.status === 'ACCEPTED') {
+        assignmentStore.markSolved(questionId);
         confetti({
-          particleCount: 100,
-          spread: 70,
+          particleCount: 120,
+          spread: 80,
           origin: { y: 0.6 },
         });
       }
-      loadHistory();
+
+      // Add to local history list
+      setHistory((prev) => [
+        {
+          id: Date.now(),
+          status: evalRes.status,
+          language: 'JAVA (OpenJDK 21)',
+          passedCases: evalRes.passedTestCases,
+          totalCases: evalRes.totalTestCases,
+          runtimeMs: evalRes.runtimeMs,
+          submittedAt: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+
+      // Async log to backend if reachable
+      api.post('/coding/submissions', {
+        problemId: problem?.id || problemId,
+        questionId: questionId,
+        language: 'JAVA',
+        code: code,
+        assignmentId: assignmentId,
+      }).catch(() => {});
+
     } catch (err: any) {
       setSubmitResult({
         submissionId: 0,
@@ -201,7 +331,7 @@ if (input.length >= 2) {
         runtimeMs: 0,
         memoryKb: 0,
         marksAwarded: 0,
-        compileOutput: err.response?.data?.message || 'Submission failed to grade.',
+        compileOutput: err.message || 'Submission failed to grade.',
       });
     } finally {
       setSubmitting(false);
@@ -210,15 +340,30 @@ if (input.length >= 2) {
 
   const activeProblem = problem || fallbackProblem;
   const sampleCases = activeProblem.sampleTestCases || [
-    { id: 1, inputData: '5\n10', expectedOutput: '15' },
-    { id: 2, inputData: '20\n30', expectedOutput: '50' },
+    { id: 1, inputData: '5\n10\n', expectedOutput: '15' },
+    { id: 2, inputData: '20\n30\n', expectedOutput: '50' },
   ];
+
+  // Prev / Next Question Navigation
+  const currentSubTopicId = assignmentStore.getQuestionById(questionId)?.subTopicId || 1;
+  const subTopicQuestions = assignmentStore.getQuestionsBySubTopic(currentSubTopicId);
+  const currentIdx = subTopicQuestions.findIndex((q) => q.id === questionId);
+  const prevQuestion = currentIdx > 0 ? subTopicQuestions[currentIdx - 1] : null;
+  const nextQuestion =
+    currentIdx >= 0 && currentIdx < subTopicQuestions.length - 1
+      ? subTopicQuestions[currentIdx + 1]
+      : null;
+
+  const handleToggleBookmark = () => {
+    const newState = assignmentStore.toggleBookmark(questionId);
+    setBookmarked(newState);
+  };
 
   if (loading) return <LoadingSpinner fullPage message="Spinning up Monaco execution environment..." />;
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] -m-4 sm:-m-6 lg:-m-8 bg-[#090b0e] text-slate-200 overflow-hidden">
-      {/* Top Header Bar (Matching media_1790007954367.png) */}
+      {/* Top Header Bar */}
       <header className="h-12 border-b border-[#1f2430] bg-[#0c0e12] px-4 flex items-center justify-between shrink-0 select-none">
         {/* Left: Back Arrow + Title + EASY Badge */}
         <div className="flex items-center gap-3">
@@ -234,12 +379,16 @@ if (input.length >= 2) {
           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 uppercase tracking-wider">
             {activeProblem.difficulty || 'EASY'}
           </span>
+
+          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-950/60 text-[#38bdf8] border border-sky-800/50">
+            <Cpu className="w-3 h-3" /> OpenJDK 21
+          </span>
         </div>
 
         {/* Right: Bookmark + Prev / Next */}
         <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setBookmarked(!bookmarked)}
+            onClick={handleToggleBookmark}
             className={`p-1.5 rounded-lg transition-colors ${
               bookmarked ? 'text-amber-400 bg-amber-950/40' : 'text-slate-400 hover:text-white hover:bg-[#181c26]'
             }`}
@@ -248,12 +397,28 @@ if (input.length >= 2) {
             <Bookmark className="w-4 h-4 fill-current" />
           </button>
 
-          <button className="px-3 py-1 bg-[#141822] hover:bg-[#1a202c] border border-[#232a3b] text-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors">
+          <button
+            disabled={!prevQuestion}
+            onClick={() => {
+              if (prevQuestion) {
+                navigate(`/coding?questionId=${prevQuestion.id}&assignmentId=${assignmentId || 1}`);
+              }
+            }}
+            className="px-3 py-1 bg-[#141822] hover:bg-[#1a202c] border border-[#232a3b] text-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             <ChevronLeft className="w-3.5 h-3.5" />
             <span>Prev</span>
           </button>
 
-          <button className="px-3.5 py-1 bg-[#00c2ff] hover:bg-[#38bdf8] text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1 shadow-md shadow-cyan-500/20 transition-all">
+          <button
+            disabled={!nextQuestion}
+            onClick={() => {
+              if (nextQuestion) {
+                navigate(`/coding?questionId=${nextQuestion.id}&assignmentId=${assignmentId || 1}`);
+              }
+            }}
+            className="px-3.5 py-1 bg-[#00c2ff] hover:bg-[#38bdf8] text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1 shadow-md shadow-cyan-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             <span>Next</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
@@ -298,12 +463,9 @@ if (input.length >= 2) {
             <div className="flex items-center gap-2">
               <button
                 className="w-6 h-6 rounded-lg bg-[#00c2ff]/10 hover:bg-[#00c2ff]/20 text-[#00c2ff] flex items-center justify-center transition-colors"
-                title="Ask TAI Assistant"
+                title="AI Coding Assistant"
               >
                 <Bot className="w-3.5 h-3.5" />
-              </button>
-              <button className="text-slate-500 hover:text-white transition-colors" title="Toggle Size">
-                <Maximize2 className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -332,6 +494,16 @@ if (input.length >= 2) {
                   </div>
                 )}
 
+                {/* Constraints */}
+                {activeProblem.constraints && (
+                  <div className="space-y-1.5">
+                    <h4 className="font-bold text-xs text-white">Constraints</h4>
+                    <pre className="bg-[#090b0e] border border-[#1f2430] rounded-xl p-2.5 font-mono text-[11px] text-amber-300">
+                      {activeProblem.constraints}
+                    </pre>
+                  </div>
+                )}
+
                 {/* Sample Cases */}
                 {sampleCases.map((sc, idx) => (
                   <div key={idx} className="space-y-2">
@@ -343,8 +515,8 @@ if (input.length >= 2) {
                       </pre>
                     </div>
                     <div>
-                      <span className="text-slate-400 block mb-1">Output:</span>
-                      <pre className="bg-[#090b0e] border border-[#1f2430] rounded-xl p-3 font-mono text-xs text-slate-200">
+                      <span className="text-slate-400 block mb-1">Expected Output:</span>
+                      <pre className="bg-[#090b0e] border border-[#1f2430] rounded-xl p-3 font-mono text-xs text-emerald-400">
                         {sc.expectedOutput}
                       </pre>
                     </div>
@@ -403,21 +575,10 @@ if (input.length >= 2) {
           <div className="h-10 border-b border-[#1f2430] px-4 flex items-center justify-between bg-[#0a0c10] shrink-0">
             <div className="flex items-center gap-2">
               <Code2 className="w-4 h-4 text-[#00c2ff]" />
-              <span className="text-xs font-bold text-white">Code</span>
+              <span className="text-xs font-bold text-white">Java Code (OpenJDK 21)</span>
             </div>
 
             <div className="flex items-center gap-2.5">
-              {/* Language Selector */}
-              <select
-                value={language}
-                onChange={(e) => handleLanguageChange(e.target.value as any)}
-                className="bg-[#141822] border border-[#232a3b] text-slate-200 text-xs font-semibold rounded-lg px-2.5 py-1 outline-none"
-              >
-                <option value="java">Java ▾</option>
-                <option value="python">Python ▾</option>
-                <option value="javascript">JavaScript ▾</option>
-              </select>
-
               <button
                 onClick={resetCode}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#181c26] transition-colors"
@@ -427,25 +588,11 @@ if (input.length >= 2) {
               </button>
 
               <button
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#181c26] transition-colors"
-                title="Editor Settings"
-              >
-                <Settings className="w-3.5 h-3.5" />
-              </button>
-
-              <button
                 onClick={() => setEditorTheme(editorTheme === 'vs-dark' ? 'light' : 'vs-dark')}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#181c26] transition-colors"
                 title="Toggle Theme"
               >
                 {editorTheme === 'vs-dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-              </button>
-
-              <button
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#181c26] transition-colors"
-                title="Fullscreen"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -454,7 +601,7 @@ if (input.length >= 2) {
           <div className="flex-1 relative min-h-[220px]">
             <Editor
               height="100%"
-              language={language}
+              language="java"
               theme={editorTheme}
               value={code}
               onChange={(val) => setCode(val || '')}
@@ -478,7 +625,7 @@ if (input.length >= 2) {
                 className="px-5 py-1.5 rounded-lg bg-[#00c853] hover:bg-[#00b248] text-white font-bold text-xs shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50"
               >
                 <Play className="w-3 h-3 fill-current" />
-                <span>{running ? 'Running...' : 'Run'}</span>
+                <span>{running ? 'Compiling & Running...' : 'Run'}</span>
               </button>
 
               <button
@@ -487,7 +634,7 @@ if (input.length >= 2) {
                 className="px-5 py-1.5 rounded-lg bg-[#ff9100] hover:bg-[#f57c00] text-white font-bold text-xs shadow-lg shadow-amber-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50"
               >
                 <Send className="w-3 h-3" />
-                <span>{submitting ? 'Submitting...' : 'Submit'}</span>
+                <span>{submitting ? 'Evaluating Test Cases...' : 'Submit'}</span>
               </button>
             </div>
           </div>
@@ -517,7 +664,7 @@ if (input.length >= 2) {
                       : 'border-transparent text-slate-400 hover:text-white'
                   }`}
                 >
-                  <span>:: Test Cases</span>
+                  <span>:: All Cases</span>
                 </button>
 
                 <button
@@ -528,7 +675,7 @@ if (input.length >= 2) {
                       : 'border-transparent text-slate-400 hover:text-white'
                   }`}
                 >
-                  <span>▶ Custom Cases</span>
+                  <span>▶ Custom STDIN</span>
                 </button>
 
                 <button
@@ -539,14 +686,12 @@ if (input.length >= 2) {
                       : 'border-transparent text-slate-400 hover:text-white'
                   }`}
                 >
-                  <span>&gt;_ Test Results</span>
+                  <span>&gt;_ Output Results</span>
                 </button>
               </div>
 
               <div className="flex items-center gap-2">
-                <button className="text-slate-500 hover:text-white transition-colors" title="Expand Console">
-                  <Maximize2 className="w-3 h-3" />
-                </button>
+                <span className="text-[10px] text-slate-500 font-mono">Wandbox OpenJDK 21</span>
               </div>
             </div>
 
@@ -577,7 +722,7 @@ if (input.length >= 2) {
                       <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                         INPUT
                       </label>
-                      <pre className="bg-[#0c0e12] border border-[#1f2430] rounded-xl p-3 font-mono text-xs text-slate-200">
+                      <pre className="bg-[#0c0e12] border border-[#1f2430] rounded-xl p-2.5 font-mono text-xs text-slate-200">
                         {sampleCases[selectedCaseIdx]?.inputData || ''}
                       </pre>
                     </div>
@@ -586,7 +731,7 @@ if (input.length >= 2) {
                       <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                         EXPECTED OUTPUT
                       </label>
-                      <pre className="bg-[#0c0e12] border border-[#1f2430] rounded-xl p-3 font-mono text-xs text-slate-200">
+                      <pre className="bg-[#0c0e12] border border-[#1f2430] rounded-xl p-2.5 font-mono text-xs text-emerald-400">
                         {sampleCases[selectedCaseIdx]?.expectedOutput || ''}
                       </pre>
                     </div>
@@ -596,8 +741,8 @@ if (input.length >= 2) {
 
               {activeConsoleTab === 'cases' && (
                 <div className="space-y-2 text-xs">
-                  <p className="text-slate-500">All challenge test cases for this coding problem:</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <p className="text-slate-500">Test cases configured for this coding challenge:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {sampleCases.map((tc, idx) => (
                       <div key={idx} className="p-3 bg-[#0c0e12] border border-[#1f2430] rounded-xl">
                         <span className="text-[10px] font-bold text-slate-400">Test Case {idx + 1}</span>
@@ -617,7 +762,7 @@ if (input.length >= 2) {
                   <textarea
                     value={customInput}
                     onChange={(e) => setCustomInput(e.target.value)}
-                    placeholder="Provide custom input arguments..."
+                    placeholder="Provide custom input arguments to feed into Scanner (System.in)..."
                     className="flex-1 w-full bg-[#0c0e12] border border-[#1f2430] rounded-xl p-3 font-mono text-xs text-slate-200 outline-none resize-none focus:border-[#00c2ff]"
                   />
                 </div>
@@ -638,7 +783,7 @@ if (input.length >= 2) {
                           {runResult.status}
                         </span>
                         <span className="text-[11px] text-slate-400">
-                          {runResult.passedCount}/{runResult.totalCount} Test Cases Passed • {runResult.runtimeMs} ms
+                          {runResult.runtimeMs} ms runtime
                         </span>
                       </div>
 
@@ -653,20 +798,20 @@ if (input.length >= 2) {
                           {runResult.testCaseResults.map((tc, idx) => (
                             <div
                               key={tc.testCaseId || idx}
-                              className={`p-2.5 rounded-xl border ${
+                              className={`p-3 rounded-xl border ${
                                 tc.passed
                                   ? 'bg-emerald-950/20 border-emerald-900/40 text-emerald-300'
                                   : 'bg-rose-950/20 border-rose-900/40 text-rose-300'
                               }`}
                             >
                               <div className="flex items-center justify-between mb-1">
-                                <span className="font-bold text-[10px]">
-                                  Case {idx + 1}: {tc.passed ? 'PASSED ✓' : 'FAILED ✗'}
+                                <span className="font-bold text-xs">
+                                  {tc.passed ? 'PASSED ✓' : 'FAILED ✗'}
                                 </span>
                                 <span className="text-[10px] text-slate-500">{tc.runtimeMs} ms</span>
                               </div>
                               <p className="text-[11px] font-mono">Expected: {tc.expectedOutput}</p>
-                              <p className="text-[11px] font-mono">Actual: {tc.actualOutput}</p>
+                              <p className="text-[11px] font-mono mt-0.5">Actual: {tc.actualOutput}</p>
                             </div>
                           ))}
                         </div>
@@ -703,16 +848,21 @@ if (input.length >= 2) {
                           {submitResult.testCaseResults.map((tc, idx) => (
                             <div
                               key={tc.testCaseId || idx}
-                              className={`p-2 rounded-xl border text-[11px] ${
+                              className={`p-2.5 rounded-xl border text-[11px] ${
                                 tc.passed
                                   ? 'bg-emerald-950/20 border-emerald-900/40 text-emerald-300'
                                   : 'bg-rose-950/20 border-rose-900/40 text-rose-300'
                               }`}
                             >
                               <div className="flex items-center justify-between">
-                                <span className="font-bold">Test {idx + 1} {tc.hidden && '(Hidden)'}</span>
-                                <span>{tc.passed ? '✓' : '✗'}</span>
+                                <span className="font-bold">Test Case {idx + 1} {tc.hidden && '(Hidden)'}</span>
+                                <span>{tc.passed ? '✓ PASSED' : '✗ FAILED'}</span>
                               </div>
+                              {!tc.hidden && tc.actualOutput && (
+                                <p className="text-[10px] text-slate-400 mt-1 font-mono truncate">
+                                  Output: {tc.actualOutput}
+                                </p>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -722,7 +872,7 @@ if (input.length >= 2) {
 
                   {!runResult && !submitResult && !running && !submitting && (
                     <div className="text-slate-500 text-center py-6 text-xs">
-                      No execution output yet. Click "Run" to test on sample cases, or "Submit" to evaluate officially.
+                      No execution output yet. Click "Run" to test your solution, or "Submit" to grade all test cases.
                     </div>
                   )}
                 </div>
@@ -734,4 +884,3 @@ if (input.length >= 2) {
     </div>
   );
 };
-

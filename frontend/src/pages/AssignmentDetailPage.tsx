@@ -14,25 +14,56 @@ import {
   PlayCircle,
   Clock,
   RotateCcw,
-  Sparkles
+  Sparkles,
+  Plus,
+  FolderPlus,
+  Layers
 } from 'lucide-react';
 import api from '../api/client';
-import { AssignmentDetail, SectionQuestion, QuestionDetail } from '../types';
+import { AssignmentDetail, QuestionDetail } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import {
+  assignmentStore,
+  SubTopic,
+  AssignmentQuestion,
+} from '../services/assignmentStore';
+import { AddQuestionModal } from '../components/assignment/AddQuestionModal';
 
 export const AssignmentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const assignmentIdNum = Number(id) || 1;
 
   const [assignment, setAssignment] = useState<AssignmentDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
 
-  // MCQ Question Solving Modal State
+  // Sub-topics & Questions state from assignmentStore
+  const [subTopics, setSubTopics] = useState<SubTopic[]>(() =>
+    assignmentStore.getSubTopics(assignmentIdNum)
+  );
+  const [selectedSectionId, setSelectedSectionId] = useState<number>(
+    subTopics[0]?.id || 1
+  );
+
+  // Modal States
+  const [isAddQuestionModalOpen, setIsAddQuestionModalOpen] = useState(false);
+  const [isNewSubTopicPromptOpen, setIsNewSubTopicPromptOpen] = useState(false);
+  const [newSubTopicTitle, setNewSubTopicTitle] = useState('');
+  const [newSubTopicDesc, setNewSubTopicDesc] = useState('');
+
+  // MCQ Question Solving Modal State (if MCQ questions exist)
   const [activeMcqModal, setActiveMcqModal] = useState<QuestionDetail | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [submittingMcq, setSubmittingMcq] = useState(false);
   const [mcqFeedback, setMcqFeedback] = useState<{ correct: boolean; explanation: string } | null>(null);
+
+  const refreshHierarchy = () => {
+    const freshSubTopics = assignmentStore.getSubTopics(assignmentIdNum);
+    setSubTopics([...freshSubTopics]);
+    if (freshSubTopics.length > 0 && !freshSubTopics.some((st) => st.id === selectedSectionId)) {
+      setSelectedSectionId(freshSubTopics[0].id);
+    }
+  };
 
   const loadData = () => {
     if (!id) return;
@@ -40,208 +71,100 @@ export const AssignmentDetailPage: React.FC = () => {
       .then((res) => {
         const data = res.data.data;
         setAssignment(data);
-        if (data?.sections && data.sections.length > 0 && selectedSectionId === null) {
-          setSelectedSectionId(data.sections[0].id);
-        }
       })
-      .catch((err) => console.error(err))
+      .catch((err) => console.warn('Backend assignment fetch warning:', err))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     loadData();
+    refreshHierarchy();
   }, [id]);
 
-  const openMcqQuestion = async (qId: number) => {
-    try {
-      const res = await api.get(`/questions/${qId}`);
-      setActiveMcqModal(res.data.data);
-      setSelectedOptions([]);
-      setMcqFeedback(null);
-    } catch (e) {
-      console.error(e);
-    }
+  const handleToggleBookmark = (qId: number) => {
+    assignmentStore.toggleBookmark(qId);
+    refreshHierarchy();
   };
 
-  const handleOptionToggle = (optLabel: string, isMulti: boolean) => {
-    if (isMulti) {
-      setSelectedOptions((prev) =>
-        prev.includes(optLabel) ? prev.filter((x) => x !== optLabel) : [...prev, optLabel]
-      );
-    } else {
-      setSelectedOptions([optLabel]);
-    }
-  };
-
-  const submitMcq = async () => {
-    if (!activeMcqModal || selectedOptions.length === 0) return;
-    setSubmittingMcq(true);
-    setMcqFeedback(null);
-    try {
-      const res = await api.post(`/questions/${activeMcqModal.id}/submit`, {
-        assignmentId: assignment?.id,
-        selectedOptions: selectedOptions,
-      });
-      const data = res.data.data;
-      setMcqFeedback({
-        correct: data.correct,
-        explanation: data.explanation || (data.correct ? 'Correct! Marks awarded.' : 'Incorrect option chosen. Please review carefully.'),
-      });
-      loadData();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSubmittingMcq(false);
-    }
-  };
-
-  const toggleBookmark = async (qId: number) => {
-    try {
-      await api.post('/bookmarks/toggle', { itemType: 'QUESTION', itemId: qId });
-      loadData();
-    } catch (e) {}
+  const handleCreateSubTopic = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubTopicTitle.trim()) return;
+    const created = assignmentStore.addSubTopic(newSubTopicTitle, newSubTopicDesc, assignmentIdNum);
+    refreshHierarchy();
+    setSelectedSectionId(created.id);
+    setNewSubTopicTitle('');
+    setNewSubTopicDesc('');
+    setIsNewSubTopicPromptOpen(false);
   };
 
   if (loading) return <LoadingSpinner fullPage message="Loading assignment..." />;
 
-  // Provide realistic fallback data matching the reference screenshot media_1790007954359.png if empty
-  const title = assignment?.title || 'Programming';
+  const title = assignment?.title || 'Java Programming';
   const difficulty = assignment?.difficulty || 'Intermediate';
-  const sections = assignment?.sections && assignment.sections.length > 0 ? assignment.sections : [
-    {
+
+  const currentSection =
+    subTopics.find((s) => s.id === selectedSectionId) || subTopics[0] || {
       id: 1,
-      assignmentId: Number(id) || 1,
+      assignmentId: assignmentIdNum,
       sectionNumber: 1,
       title: 'Data Types',
       description: 'Primitive and non-primitive data types in Java',
-      questionCount: 12,
-      solvedCount: 12,
-      totalMarks: 120,
-      marksObtained: 120,
+      questionCount: 0,
+      solvedCount: 0,
+      totalMarks: 0,
+      marksObtained: 0,
       locked: false,
-      status: 'COMPLETED' as const,
-      questions: [
-        { id: 101, title: 'Add 2 Integers', questionType: 'CODING' as const, difficulty: 'EASY' as const, marks: 10, status: 'SOLVED' as const, bookmarked: false, solved: true },
-        { id: 102, title: 'Adding Three Integers', questionType: 'CODING' as const, difficulty: 'EASY' as const, marks: 10, status: 'SOLVED' as const, bookmarked: false, solved: true },
-        { id: 103, title: 'Product of Three', questionType: 'CODING' as const, difficulty: 'EASY' as const, marks: 10, status: 'SOLVED' as const, bookmarked: false, solved: true },
-        { id: 104, title: 'Sum Combinations', questionType: 'CODING' as const, difficulty: 'EASY' as const, marks: 10, status: 'SOLVED' as const, bookmarked: false, solved: true },
-        { id: 105, title: 'Dollar to Rupee', questionType: 'CODING' as const, difficulty: 'EASY' as const, marks: 10, status: 'SOLVED' as const, bookmarked: false, solved: true },
-        { id: 106, title: 'Rectangle Perimeter', questionType: 'CODING' as const, difficulty: 'EASY' as const, marks: 10, status: 'SOLVED' as const, bookmarked: false, solved: true },
-      ],
-    },
-    {
-      id: 2,
-      assignmentId: Number(id) || 1,
-      sectionNumber: 2,
-      title: 'If Else',
-      description: 'Conditional statements and branch predictions',
-      questionCount: 22,
-      solvedCount: 22,
-      totalMarks: 220,
-      marksObtained: 220,
-      locked: false,
-      status: 'COMPLETED' as const,
-      questions: [],
-    },
-    {
-      id: 3,
-      assignmentId: Number(id) || 1,
-      sectionNumber: 3,
-      title: 'Loops',
-      description: 'Iteration constructs: for, while, and do-while loops',
-      questionCount: 22,
-      solvedCount: 22,
-      totalMarks: 220,
-      marksObtained: 220,
-      locked: false,
-      status: 'COMPLETED' as const,
-      questions: [],
-    },
-    {
-      id: 4,
-      assignmentId: Number(id) || 1,
-      sectionNumber: 4,
-      title: 'Array Traversal',
-      description: 'Iterating through single and multidimensional arrays',
-      questionCount: 17,
-      solvedCount: 17,
-      totalMarks: 170,
-      marksObtained: 170,
-      locked: false,
-      status: 'COMPLETED' as const,
-      questions: [],
-    },
-    {
-      id: 5,
-      assignmentId: Number(id) || 1,
-      sectionNumber: 5,
-      title: 'Array Traversal II',
-      description: 'Advanced array manipulation algorithms',
-      questionCount: 39,
-      solvedCount: 39,
-      totalMarks: 390,
-      marksObtained: 390,
-      locked: false,
-      status: 'COMPLETED' as const,
-      questions: [],
-    },
-    {
-      id: 6,
-      assignmentId: Number(id) || 1,
-      sectionNumber: 6,
-      title: 'Array Pairs',
-      description: 'Two-pointer array pairing questions',
-      questionCount: 18,
-      solvedCount: 18,
-      totalMarks: 180,
-      marksObtained: 180,
-      locked: false,
-      status: 'COMPLETED' as const,
-      questions: [],
-    },
-    {
-      id: 7,
-      assignmentId: Number(id) || 1,
-      sectionNumber: 7,
-      title: 'Sorted Arrays',
-      description: 'Binary search and sorting on linear structures',
-      questionCount: 14,
-      solvedCount: 14,
-      totalMarks: 140,
-      marksObtained: 140,
-      locked: false,
-      status: 'COMPLETED' as const,
-      questions: [],
-    },
-  ];
+      status: 'NOT_STARTED' as const,
+    };
 
-  const currentSection = sections.find((s) => s.id === (selectedSectionId || sections[0].id)) || sections[0];
+  const currentQuestions = assignmentStore.getQuestionsBySubTopic(currentSection.id);
 
-  const totalModules = sections.length;
-  const completedModules = sections.filter((s) => s.status === 'COMPLETED' || s.solvedCount === s.questionCount).length;
-  const modulesPct = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 75;
+  // Metrics calculations
+  const totalModules = subTopics.length;
+  const completedModules = subTopics.filter((s) => s.status === 'COMPLETED').length;
+  const modulesPct = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
 
-  const totalQuestions = sections.reduce((acc, s) => acc + s.questionCount, 0) || 253;
-  const totalSolved = sections.reduce((acc, s) => acc + s.solvedCount, 0) || 222;
-  const solvedPct = totalQuestions > 0 ? Math.round((totalSolved / totalQuestions) * 100) : 88;
+  const totalQuestions = subTopics.reduce((acc, s) => acc + s.questionCount, 0);
+  const totalSolved = subTopics.reduce((acc, s) => acc + s.solvedCount, 0);
+  const solvedPct = totalQuestions > 0 ? Math.round((totalSolved / totalQuestions) * 100) : 0;
 
-  const totalAttempted = totalSolved + 1;
-  const attemptedPct = totalQuestions > 0 ? Math.round((totalAttempted / totalQuestions) * 100) : 88;
+  const totalAttempted = Math.min(totalQuestions, totalSolved + 1);
+  const attemptedPct = totalQuestions > 0 ? Math.round((totalAttempted / totalQuestions) * 100) : 0;
 
-  const totalMarks = sections.reduce((acc, s) => acc + s.totalMarks, 0) || 2550;
-  const marksObtained = sections.reduce((acc, s) => acc + s.marksObtained, 0) || 2060;
-  const marksPct = totalMarks > 0 ? Math.round((marksObtained / totalMarks) * 100) : 81;
+  const totalMarks = subTopics.reduce((acc, s) => acc + s.totalMarks, 0);
+  const marksObtained = subTopics.reduce((acc, s) => acc + s.marksObtained, 0);
+  const marksPct = totalMarks > 0 ? Math.round((marksObtained / totalMarks) * 100) : 0;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Top Breadcrumb */}
-      <Link
-        to="/assignments"
-        className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span>Assignments</span>
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link
+          to="/assignments"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Assignments</span>
+        </Link>
+
+        {/* Quick Admin Actions */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsNewSubTopicPromptOpen(true)}
+            className="px-3 py-1.5 rounded-xl bg-[#141822] hover:bg-[#1c2232] border border-[#232c40] text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          >
+            <FolderPlus className="w-3.5 h-3.5 text-[#00c2ff]" />
+            <span>+ New Sub-Topic</span>
+          </button>
+          <button
+            onClick={() => setIsAddQuestionModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-xl bg-[#00c2ff] hover:bg-[#38bdf8] text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-cyan-500/20"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>+ Add Question</span>
+          </button>
+        </div>
+      </div>
 
       {/* Header Info */}
       <div className="space-y-1">
@@ -253,12 +176,11 @@ export const AssignmentDetailPage: React.FC = () => {
         </div>
         <p className="text-xs text-slate-400 max-w-4xl">
           {assignment?.description ||
-            'This assignment module contains a curated collection of coding interview questions from various companies...'}
-          <button className="text-[#00c2ff] hover:underline ml-1 font-medium">More</button>
+            'Master core Java concepts with hands-on coding challenges evaluated by an automated OpenJDK 21 online compiler.'}
         </p>
       </div>
 
-      {/* 4 Metric Cards (Matching media_1790007954359.png) */}
+      {/* 4 Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Modules */}
         <div className="bg-[#0c0e12] border border-[#1f2430] rounded-2xl p-4 flex flex-col justify-between shadow-lg">
@@ -272,7 +194,7 @@ export const AssignmentDetailPage: React.FC = () => {
           </div>
           <div className="h-1 w-full bg-[#181c26] rounded-full overflow-hidden mt-4">
             <div
-              className="h-full bg-[#00c2ff] rounded-full"
+              className="h-full bg-[#00c2ff] rounded-full transition-all duration-500"
               style={{ width: `${modulesPct}%` }}
             />
           </div>
@@ -290,7 +212,7 @@ export const AssignmentDetailPage: React.FC = () => {
           </div>
           <div className="h-1 w-full bg-[#181c26] rounded-full overflow-hidden mt-4">
             <div
-              className="h-full bg-emerald-400 rounded-full"
+              className="h-full bg-emerald-400 rounded-full transition-all duration-500"
               style={{ width: `${solvedPct}%` }}
             />
           </div>
@@ -308,7 +230,7 @@ export const AssignmentDetailPage: React.FC = () => {
           </div>
           <div className="h-1 w-full bg-[#181c26] rounded-full overflow-hidden mt-4">
             <div
-              className="h-full bg-amber-400 rounded-full"
+              className="h-full bg-amber-400 rounded-full transition-all duration-500"
               style={{ width: `${attemptedPct}%` }}
             />
           </div>
@@ -322,15 +244,15 @@ export const AssignmentDetailPage: React.FC = () => {
               <span className="text-cyan-400 font-bold">{marksPct}%</span>
             </div>
             <div className="text-2xl font-black text-white mt-1">
-              {(marksObtained / 1000).toFixed(2)}k
+              {marksObtained}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
-              / {(totalMarks / 1000).toFixed(2)}k of total marks
+              / {totalMarks} total marks
             </div>
           </div>
           <div className="h-1 w-full bg-[#181c26] rounded-full overflow-hidden mt-4">
             <div
-              className="h-full bg-cyan-400 rounded-full"
+              className="h-full bg-cyan-400 rounded-full transition-all duration-500"
               style={{ width: `${marksPct}%` }}
             />
           </div>
@@ -339,13 +261,13 @@ export const AssignmentDetailPage: React.FC = () => {
 
       {/* Two-Column Split: Modules Sidebar (Left) + Questions List (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Modules Navigation */}
+        {/* Left Column: Sub-Topics Navigation */}
         <div className="lg:col-span-4 bg-[#0c0e12] border border-[#1f2430] rounded-2xl p-4 shadow-xl">
           <div className="flex items-center justify-between pb-3 mb-2 border-b border-[#1a1f2c]">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-white">Modules</span>
+              <span className="font-bold text-sm text-white">Sub-Topics</span>
               <span className="text-[10px] bg-[#181c26] text-slate-400 font-bold px-1.5 py-0.5 rounded-md">
-                {sections.length}
+                {subTopics.length}
               </span>
             </div>
             <div className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
@@ -355,9 +277,9 @@ export const AssignmentDetailPage: React.FC = () => {
           </div>
 
           <div className="space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
-            {sections.map((sec, idx) => {
+            {subTopics.map((sec, idx) => {
               const isSelected = sec.id === currentSection.id;
-              const isCompleted = sec.status === 'COMPLETED' || sec.solvedCount === sec.questionCount;
+              const isCompleted = sec.status === 'COMPLETED';
               return (
                 <button
                   key={sec.id}
@@ -399,9 +321,20 @@ export const AssignmentDetailPage: React.FC = () => {
               );
             })}
           </div>
+
+          {/* Add Subtopic inline button */}
+          <div className="pt-3 mt-3 border-t border-[#1a1f2c]">
+            <button
+              onClick={() => setIsNewSubTopicPromptOpen(true)}
+              className="w-full py-2 px-3 rounded-xl bg-[#141822] hover:bg-[#1a202e] border border-dashed border-[#263147] hover:border-[#00c2ff]/50 text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+            >
+              <FolderPlus className="w-3.5 h-3.5 text-[#00c2ff]" />
+              <span>+ Add New Sub-Topic</span>
+            </button>
+          </div>
         </div>
 
-        {/* Right Column: Questions List */}
+        {/* Right Column: Questions List for selected Sub-Topic */}
         <div className="lg:col-span-8 bg-[#0c0e12] border border-[#1f2430] rounded-2xl p-5 shadow-xl">
           {/* Header of Right Pane */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-4 border-b border-[#1a1f2c]">
@@ -417,18 +350,18 @@ export const AssignmentDetailPage: React.FC = () => {
                 )}
               </div>
               <div className="text-xs text-slate-400 mt-1">
-                {currentSection.questionCount} questions · {currentSection.totalMarks} marks
+                {currentQuestions.length} questions · {currentSection.totalMarks} marks ·{' '}
+                {currentSection.description}
               </div>
             </div>
 
             <div className="flex items-center gap-2.5">
-              <button className="px-3.5 py-1.5 rounded-xl bg-[#181c26] hover:bg-[#202533] border border-[#2a3040] text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm">
-                <Share2 className="w-3.5 h-3.5 text-slate-400" />
-                <span>Share achievement</span>
-              </button>
-              <button className="px-4 py-1.5 rounded-xl bg-[#00b4d8] hover:bg-[#00c2ff] text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-cyan-500/20">
-                <PlayCircle className="w-3.5 h-3.5" />
-                <span>Take test</span>
+              <button
+                onClick={() => setIsAddQuestionModalOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-[#00c2ff] hover:bg-[#38bdf8] text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-cyan-500/20"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Question</span>
               </button>
             </div>
           </div>
@@ -439,18 +372,40 @@ export const AssignmentDetailPage: React.FC = () => {
               <div className="w-12 h-12 rounded-2xl bg-amber-950/40 border border-amber-800/40 text-amber-400 flex items-center justify-center mb-3">
                 <Lock className="w-6 h-6" />
               </div>
-              <h4 className="text-sm font-bold text-white">Section Locked</h4>
+              <h4 className="text-sm font-bold text-white">Sub-Topic Locked</h4>
               <p className="text-xs text-slate-400 mt-1 max-w-md">
-                To maintain strict mastery progression, you must complete and solve all questions in Section{' '}
-                {currentSection.sectionNumber - 1} before accessing this challenge block.
+                Complete prior challenges to unlock this module.
               </p>
+            </div>
+          ) : currentQuestions.length === 0 ? (
+            <div className="p-12 text-center flex flex-col items-center justify-center bg-[#090b0e] rounded-xl border border-dashed border-[#1f2430]">
+              <div className="w-12 h-12 rounded-2xl bg-[#141822] text-[#00c2ff] flex items-center justify-center mb-3">
+                <Code2 className="w-6 h-6" />
+              </div>
+              <h4 className="text-sm font-bold text-white">No questions in this sub-topic yet</h4>
+              <p className="text-xs text-slate-400 mt-1 max-w-sm mb-4">
+                Be the first to add a Java coding question with automated test cases to this topic!
+              </p>
+              <button
+                onClick={() => setIsAddQuestionModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-[#00c2ff] text-slate-950 text-xs font-bold flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add First Question</span>
+              </button>
             </div>
           ) : (
             /* Questions List */
             <div className="space-y-2.5">
-              {(currentSection.questions || []).map((q) => {
-                const isCoding = q.questionType === 'CODING';
-                const isSolved = q.status === 'SOLVED' || (q as any).solved;
+              {currentQuestions.map((q) => {
+                const isSolved = q.solved;
+                const difficultyColor =
+                  q.difficulty === 'EASY'
+                    ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/40'
+                    : q.difficulty === 'MEDIUM'
+                    ? 'bg-amber-950/60 text-amber-400 border-amber-800/40'
+                    : 'bg-rose-950/60 text-rose-400 border-rose-800/40';
+
                 return (
                   <div
                     key={q.id}
@@ -471,13 +426,9 @@ export const AssignmentDetailPage: React.FC = () => {
                       <div className="min-w-0">
                         <h4
                           onClick={() => {
-                            if (isCoding) {
-                              navigate(
-                                `/coding?problemId=1&questionId=${q.id}&assignmentId=${assignment?.id || id}`
-                              );
-                            } else {
-                              openMcqQuestion(q.id);
-                            }
+                            navigate(
+                              `/coding?questionId=${q.id}&assignmentId=${assignmentIdNum}`
+                            );
                           }}
                           className="text-xs sm:text-sm font-bold text-white group-hover:text-[#00c2ff] transition-colors cursor-pointer truncate"
                         >
@@ -486,13 +437,13 @@ export const AssignmentDetailPage: React.FC = () => {
 
                         <div className="flex flex-wrap items-center gap-2 mt-1">
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-950/60 text-[#38bdf8] border border-sky-800/40 flex items-center gap-1">
-                            •) {q.questionType.replace('_', ' ')}
+                            •) CODING
                           </span>
                           <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                            <RotateCcw className="w-3 h-3 text-slate-500" /> 1 attempt
+                            <Code2 className="w-3 h-3 text-[#00c2ff]" /> OpenJDK 21
                           </span>
                           <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-slate-500" /> 7h:30m:22s spent
+                            <Sparkles className="w-3 h-3 text-amber-400" /> {q.testCases?.length || 1} test cases
                           </span>
                         </div>
                       </div>
@@ -500,16 +451,18 @@ export const AssignmentDetailPage: React.FC = () => {
 
                     {/* Right: Difficulty + Marks + Bookmark + Action Button */}
                     <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
-                        • Easy
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${difficultyColor}`}
+                      >
+                        • {q.difficulty[0] + q.difficulty.slice(1).toLowerCase()}
                       </span>
 
                       <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-[#181c26] text-slate-300 border border-[#232938]">
-                        10 / 10 marks
+                        {isSolved ? `${q.marks} / ${q.marks}` : `0 / ${q.marks}`} marks
                       </span>
 
                       <button
-                        onClick={() => toggleBookmark(q.id)}
+                        onClick={() => handleToggleBookmark(q.id)}
                         className={`p-1.5 rounded-lg transition-colors ${
                           q.bookmarked
                             ? 'text-amber-400 bg-amber-950/50'
@@ -520,21 +473,16 @@ export const AssignmentDetailPage: React.FC = () => {
                         <Bookmark className="w-3.5 h-3.5 fill-current" />
                       </button>
 
-                      {isCoding ? (
-                        <Link
-                          to={`/coding?problemId=1&questionId=${q.id}&assignmentId=${assignment?.id || id}`}
-                          className="px-3.5 py-1.5 rounded-lg bg-[#181c26] hover:bg-[#202533] border border-[#2a3040] text-slate-200 text-xs font-semibold transition-colors shadow-sm"
-                        >
-                          Review
-                        </Link>
-                      ) : (
-                        <button
-                          onClick={() => openMcqQuestion(q.id)}
-                          className="px-3.5 py-1.5 rounded-lg bg-[#181c26] hover:bg-[#202533] border border-[#2a3040] text-slate-200 text-xs font-semibold transition-colors shadow-sm"
-                        >
-                          Review
-                        </button>
-                      )}
+                      <Link
+                        to={`/coding?questionId=${q.id}&assignmentId=${assignmentIdNum}`}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors shadow-sm ${
+                          isSolved
+                            ? 'bg-[#181c26] hover:bg-[#202533] border border-[#2a3040] text-slate-200'
+                            : 'bg-[#00c2ff] hover:bg-[#38bdf8] text-slate-950 font-bold'
+                        }`}
+                      >
+                        {isSolved ? 'Review' : 'Solve'}
+                      </Link>
                     </div>
                   </div>
                 );
@@ -544,111 +492,88 @@ export const AssignmentDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* MCQ Solving Interactive Modal */}
-      {activeMcqModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0c0e12] rounded-3xl max-w-xl w-full border border-[#1f2430] shadow-2xl overflow-hidden p-6 sm:p-8 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between pb-4 border-b border-[#1a1f2c]">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-sky-950/60 text-[#38bdf8] border border-sky-800/40">
-                {activeMcqModal.questionType} • {activeMcqModal.marks} Marks
-              </span>
+      {/* Modal: Add Question */}
+      {isAddQuestionModalOpen && (
+        <AddQuestionModal
+          subTopics={subTopics}
+          activeSubTopicId={selectedSectionId}
+          assignmentId={assignmentIdNum}
+          onClose={() => setIsAddQuestionModalOpen(false)}
+          onQuestionAdded={(newQ) => {
+            refreshHierarchy();
+            setSelectedSectionId(newQ.subTopicId);
+          }}
+          onSubTopicAdded={(newSt) => {
+            refreshHierarchy();
+            setSelectedSectionId(newSt.id);
+          }}
+        />
+      )}
+
+      {/* Quick Modal: Add Sub-Topic */}
+      {isNewSubTopicPromptOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0c0e12] rounded-2xl max-w-md w-full border border-[#1f2430] p-6 shadow-2xl animate-in fade-in zoom-in-95 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#1a1f2c]">
+              <div className="flex items-center gap-2">
+                <FolderPlus className="w-4 h-4 text-[#00c2ff]" />
+                <h3 className="font-bold text-sm text-white">Create New Sub-Topic</h3>
+              </div>
               <button
-                onClick={() => setActiveMcqModal(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                onClick={() => setIsNewSubTopicPromptOpen(false)}
+                className="text-slate-400 hover:text-white"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="py-4 space-y-4">
-              <h3 className="font-extrabold text-sm text-white leading-relaxed">
-                {activeMcqModal.title}
-              </h3>
-              <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
-                {activeMcqModal.description}
-              </p>
-
-              {/* Options */}
-              <div className="space-y-2 pt-2">
-                {activeMcqModal.options?.map((opt) => {
-                  const isSelected = selectedOptions.includes(opt.optionLabel);
-                  return (
-                    <div
-                      key={opt.id}
-                      onClick={() =>
-                        handleOptionToggle(
-                          opt.optionLabel,
-                          activeMcqModal.questionType === 'MCQ_MULTI'
-                        )
-                      }
-                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
-                        isSelected
-                          ? 'bg-[#141b2b] border-[#00c2ff] ring-1 ring-[#00c2ff]/30'
-                          : 'bg-[#090b0e] border-[#1f2430] hover:bg-[#12151c]'
-                      }`}
-                    >
-                      <div
-                        className={`w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 ${
-                          isSelected
-                            ? 'bg-[#00c2ff] text-slate-950'
-                            : 'bg-[#181c26] text-slate-300 border border-[#263147]'
-                        }`}
-                      >
-                        {opt.optionLabel}
-                      </div>
-                      <span className="text-xs text-slate-200 mt-0.5">{opt.optionText}</span>
-                    </div>
-                  );
-                })}
+            <form onSubmit={handleCreateSubTopic} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  Sub-Topic Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. String Manipulation, Bitwise Algorithms"
+                  value={newSubTopicTitle}
+                  onChange={(e) => setNewSubTopicTitle(e.target.value)}
+                  className="w-full bg-[#121620] border border-[#222b3d] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00c2ff]"
+                />
               </div>
 
-              {/* Feedback Alert */}
-              {mcqFeedback && (
-                <div
-                  className={`p-4 rounded-xl text-xs font-medium ${
-                    mcqFeedback.correct
-                      ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60'
-                      : 'bg-rose-950/60 text-rose-300 border border-rose-800/60'
-                  }`}
-                >
-                  <p className="font-bold flex items-center gap-1.5 mb-1">
-                    {mcqFeedback.correct ? (
-                      <>
-                        <Check className="w-4 h-4 text-emerald-400" /> Correct Answer! (+
-                        {activeMcqModal.marks} pts)
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle className="w-4 h-4 text-rose-400" /> Incorrect Choice
-                      </>
-                    )}
-                  </p>
-                  <p className="text-[11px] opacity-90">{mcqFeedback.explanation}</p>
-                </div>
-              )}
-            </div>
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  Description (optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. String methods, palindrome, anagram questions"
+                  value={newSubTopicDesc}
+                  onChange={(e) => setNewSubTopicDesc(e.target.value)}
+                  className="w-full bg-[#121620] border border-[#222b3d] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00c2ff]"
+                />
+              </div>
 
-            <div className="pt-4 border-t border-[#1a1f2c] flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setActiveMcqModal(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                disabled={selectedOptions.length === 0 || submittingMcq}
-                onClick={submitMcq}
-                className="px-5 py-2.5 rounded-xl bg-[#00c2ff] hover:bg-[#38bdf8] text-slate-950 text-xs font-bold shadow-md shadow-cyan-500/20 disabled:opacity-50 transition-all"
-              >
-                {submittingMcq ? 'Grading...' : 'Submit Choice'}
-              </button>
-            </div>
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsNewSubTopicPromptOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[#00c2ff] hover:bg-[#38bdf8] text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20"
+                >
+                  Create Sub-Topic
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
     </div>
   );
 };
-
