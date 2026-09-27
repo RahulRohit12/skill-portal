@@ -83,23 +83,8 @@ export const CoursesPage: React.FC = () => {
   // Certificate Modal State
   const [certificateCourse, setCertificateCourse] = useState<string | null>(null);
 
-  // Fallback active live class for uninterrupted access
-  const DEFAULT_LIVE_CLASS: LiveClassItem = useMemo(() => ({
-    id: 101,
-    batchId: 1,
-    title: 'Skillex Live Masterclass: Full-Stack Architecture & High-Performance SQL',
-    description: 'Real-time masterclass covering distributed microservices, MySQL query execution plans, Redis caching, and live code walkthrough with faculty Q&A.',
-    meetingLink: 'https://www.youtube.com/watch?v=xk4_1vDrzzo',
-    instructorName: 'Somanna MG & Lead Faculty',
-    batchName: 'Batch 2026 - Premium Cohort',
-    courseTitle: 'Full-Stack Software Engineering',
-    status: 'ACTIVE',
-    startedAt: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
-    createdAt: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
-  }), []);
-
-  // Live Class State & Polling
-  const [activeLiveClass, setActiveLiveClass] = useState<LiveClassItem | null>(DEFAULT_LIVE_CLASS);
+  // Live Class State & Polling (Only populated when admin starts a live session)
+  const [activeLiveClass, setActiveLiveClass] = useState<LiveClassItem | null>(null);
   const [isWatchingLive, setIsWatchingLive] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
   const [liveAudioBoost, setLiveAudioBoost] = useState(false);
@@ -175,10 +160,10 @@ export const CoursesPage: React.FC = () => {
       if (res.data?.data) {
         setActiveLiveClass(res.data.data);
       } else {
-        setActiveLiveClass(DEFAULT_LIVE_CLASS);
+        setActiveLiveClass(null);
       }
     } catch (e) {
-      setActiveLiveClass(DEFAULT_LIVE_CLASS);
+      setActiveLiveClass(null);
     }
   };
 
@@ -1247,34 +1232,7 @@ ORDER BY created_at DESC;`}
             </a>
           </div>
         </div>
-      ) : (
-        /* Top Banner: No live classes currently scheduled */
-        <div className="rounded-2xl bg-[#0c0e12] border border-[#191c24] p-6 flex flex-col sm:flex-row items-center justify-between gap-6 relative overflow-hidden shadow-xl">
-          <div className="space-y-2 z-10">
-            <div className="flex items-center gap-2">
-              <span className="inline-block w-2 h-2 rounded-full bg-slate-500" />
-              <h2 className="text-base sm:text-lg font-black text-white">
-                No live class currently scheduled
-              </h2>
-            </div>
-            <p className="text-xs text-slate-400 max-w-lg leading-relaxed">
-              There are currently no active live sessions for your batch. Check back when your instructor starts a class or browse your on-demand masterclasses below.
-            </p>
-            <button
-              onClick={() => alert('Class Schedule: Mon-Fri 10:00 AM - 1:00 PM & 3:00 PM - 6:00 PM')}
-              className="mt-2 px-4 py-2 bg-[#161a24] hover:bg-[#1e2332] text-slate-200 border border-[#232938] rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-            >
-              View Schedule
-            </button>
-          </div>
-
-          <div className="w-44 h-28 hidden sm:flex items-center justify-center relative shrink-0">
-            <div className="w-36 h-24 rounded-xl bg-gradient-to-tr from-sky-500/15 to-blue-500/10 border border-sky-500/30 flex items-center justify-center text-3xl">
-              💻
-            </div>
-          </div>
-        </div>
-      )}
+      ) : null}
 
       {/* Top Banner / Header */}
       <div className="bg-[#0c0e12] border border-[#191c24] rounded-2xl p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
