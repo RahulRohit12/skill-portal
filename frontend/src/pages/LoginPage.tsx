@@ -287,27 +287,18 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          {/* RIGHT: 3D Student Boy Standing Beside the Card (5 Cols, Matching Mockup) */}
-          <div className="lg:col-span-5 flex flex-col items-center justify-center">
-            <div className="relative group">
-              <div className="absolute -inset-2 bg-gradient-to-r from-cyan-500/25 via-sky-500/20 to-blue-600/25 rounded-3xl blur-2xl opacity-75 group-hover:opacity-100 transition-opacity" />
+          {/* RIGHT: Student Boy Standing Beside the Card (Transparent PNG from getmaterials) */}
+          <div className="lg:col-span-5 flex items-center justify-center relative">
+            <div className="relative w-full max-w-[280px] sm:max-w-[340px] flex items-center justify-center">
+              {/* Ambient Glow */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/20 via-sky-500/15 to-blue-600/20 rounded-full blur-3xl opacity-75 pointer-events-none" />
               
-              <div className="relative w-64 sm:w-72 h-[380px] sm:h-[420px] rounded-3xl overflow-hidden border-2 border-cyan-400/40 bg-gradient-to-b from-[#0b101c] to-[#07090e] shadow-2xl flex items-center justify-center">
-                <img
-                  src="/student-mascot.png"
-                  alt="SkillX Academy Student Mascot in X Hoodie"
-                  className="w-full h-full object-cover object-top hover:scale-105 transition-transform duration-300"
-                />
-                
-                {/* Floating Bottom Status Pill */}
-                <div className="absolute bottom-3 left-3 right-3 py-1.5 px-3 rounded-xl bg-black/60 backdrop-blur-md border border-cyan-500/40 text-center flex items-center justify-between text-[11px] font-bold text-cyan-300">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    Active Learner
-                  </span>
-                  <span className="text-white font-black tracking-wide">Batch 2026</span>
-                </div>
-              </div>
+              <img
+                src="/student5.png"
+                alt="SkillX Academy Student"
+                className="relative z-10 w-full h-auto max-h-[460px] object-contain drop-shadow-[0_20px_40px_rgba(0,194,255,0.25)] hover:scale-105 transition-transform duration-300 pointer-events-none select-none"
+                loading="eager"
+              />
             </div>
           </div>
 
