@@ -31,6 +31,7 @@ import { CodingProblemDetail, RunCodeResult, SubmitCodeResult } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { assignmentStore, AssignmentQuestion } from '../services/assignmentStore';
 import { executeJavaCode, evaluateAllTestCases, TestCaseItem } from '../services/compilerService';
+import { AiCodeMentor } from '../components/coding/AiCodeMentor';
 
 export const CodingWorkspacePage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -41,7 +42,7 @@ export const CodingWorkspacePage: React.FC = () => {
 
   const [problem, setProblem] = useState<CodingProblemDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeLeftTab, setActiveLeftTab] = useState<'description' | 'history'>('description');
+  const [activeLeftTab, setActiveLeftTab] = useState<'description' | 'history' | 'ai-mentor'>('description');
   const [history, setHistory] = useState<any[]>([]);
 
   // Editor State
@@ -490,6 +491,21 @@ class Solution {
               </button>
 
               <button
+                onClick={() => setActiveLeftTab('ai-mentor')}
+                className={`text-xs font-semibold h-full border-b-2 flex items-center gap-1.5 px-2 transition-all ${
+                  activeLeftTab === 'ai-mentor'
+                    ? 'border-purple-500 text-purple-300 bg-purple-500/10'
+                    : 'border-transparent text-purple-400 hover:text-purple-300'
+                }`}
+              >
+                <Bot className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+                <span>AI Mentor</span>
+                <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1 py-0.2 rounded-full font-bold border border-purple-500/40">
+                  Gemini
+                </span>
+              </button>
+
+              <button
                 onClick={() => setActiveLeftTab('history')}
                 className={`text-xs font-semibold h-full border-b-2 flex items-center gap-1.5 px-1 transition-all ${
                   activeLeftTab === 'history'
@@ -507,21 +523,34 @@ class Solution {
 
             <div className="flex items-center gap-2">
               <button
-                className="w-6 h-6 rounded-lg bg-[#00c2ff]/10 hover:bg-[#00c2ff]/20 text-[#00c2ff] flex items-center justify-center transition-colors"
-                title="AI Coding Assistant"
+                onClick={() => setActiveLeftTab('ai-mentor')}
+                className="px-2.5 py-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 flex items-center gap-1.5 border border-purple-500/30 text-xs font-bold transition-all cursor-pointer shadow-sm"
+                title="Open Skillex AI Code Mentor"
               >
-                <Bot className="w-3.5 h-3.5" />
+                <Bot className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+                <span className="hidden sm:inline">Ask AI Mentor</span>
               </button>
             </div>
           </div>
 
           {/* Left Content Scrollable */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-6 text-xs text-slate-300">
-            {activeLeftTab === 'description' ? (
-              <>
-                <p className="text-sm leading-relaxed text-slate-200">
-                  {activeProblem.description}
-                </p>
+          {activeLeftTab === 'ai-mentor' ? (
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <AiCodeMentor
+                problemTitle={activeProblem.title}
+                problemDescription={activeProblem.description}
+                currentCode={code}
+                language={language}
+                lastExecutionError={runResult?.compileOutput || undefined}
+              />
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto p-5 space-y-6 text-xs text-slate-300">
+              {activeLeftTab === 'description' ? (
+                <>
+                  <p className="text-sm leading-relaxed text-slate-200">
+                    {activeProblem.description}
+                  </p>
 
                 {/* Input Format */}
                 {activeProblem.inputFormat && (
@@ -611,7 +640,8 @@ class Solution {
                 )}
               </div>
             )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Right Column: Code Editor & Bottom Console Pane */}

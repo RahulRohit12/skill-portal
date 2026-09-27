@@ -32,8 +32,11 @@ import {
   Plus,
   Send,
   Zap,
+  Target,
 } from 'lucide-react';
 import api from '../api/client';
+import { JobSuitabilityModal } from '../components/job/JobSuitabilityModal';
+
 
 export type ApplicationStatus =
   | 'NOT_APPLIED'
@@ -170,6 +173,7 @@ export const JobsPage: React.FC = () => {
 
   // Modals & UI helpers
   const [selectedJobForModal, setSelectedJobForModal] = useState<JobItem | null>(null);
+  const [suitabilityJob, setSuitabilityJob] = useState<JobItem | null>(null);
   const [copiedJobId, setCopiedJobId] = useState<number | null>(null);
   const [showAddSourceModal, setShowAddSourceModal] = useState<boolean>(false);
   const [newCompanyName, setNewCompanyName] = useState<string>('');
@@ -1009,8 +1013,18 @@ export const JobsPage: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Primary Direct Apply Button */}
+                  {/* Primary Direct Apply Button & Fit Analyzer */}
                   <div onClick={(e) => e.stopPropagation()} className="space-y-1.5">
+                    <button
+                      onClick={() => setSuitabilityJob(job)}
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[#00c2ff]/10 hover:bg-[#00c2ff]/20 text-[#00c2ff] border border-[#00c2ff]/30 transition-all cursor-pointer shadow-sm active:scale-98"
+                      title="Analyze your skills & suitability for this job"
+                    >
+                      <Target className="w-3.5 h-3.5 text-[#00c2ff]" />
+                      <span>Analyze Job Fit</span>
+                      <Sparkles className="w-3 h-3 text-cyan-400" />
+                    </button>
+
                     <button
                       onClick={() => handleApplyClick(job)}
                       className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all shadow-lg active:scale-98 cursor-pointer"
@@ -1176,7 +1190,19 @@ export const JobsPage: React.FC = () => {
                 </select>
               </div>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={() => {
+                    const j = selectedJobForModal;
+                    setSelectedJobForModal(null);
+                    setSuitabilityJob(j);
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#00c2ff]/10 hover:bg-[#00c2ff]/20 text-[#00c2ff] border border-[#00c2ff]/40 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  <Target className="w-3.5 h-3.5 text-[#00c2ff]" />
+                  <span>Analyze Job Fit</span>
+                </button>
+
                 <button
                   onClick={() => setSelectedJobForModal(null)}
                   className="px-4 py-2.5 bg-[#161922] hover:bg-[#1f2430] text-slate-300 rounded-xl text-xs font-bold border border-[#222734] transition-all cursor-pointer"
@@ -1268,6 +1294,17 @@ export const JobsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ==================== 8. JOB SUITABILITY ANALYZER MODAL ==================== */}
+      <JobSuitabilityModal
+        isOpen={!!suitabilityJob}
+        job={suitabilityJob}
+        onClose={() => setSuitabilityJob(null)}
+        onApply={(j) => {
+          setSuitabilityJob(null);
+          handleApplyClick(j as JobItem);
+        }}
+      />
     </div>
   );
 };

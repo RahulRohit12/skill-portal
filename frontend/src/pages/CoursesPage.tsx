@@ -11,12 +11,16 @@ import {
   Sparkles,
   Calendar,
   Radio,
-  User
+  User,
+  Award,
+  CheckCircle2
 } from 'lucide-react';
 import api from '../api/client';
 import { CourseSummary, LiveClassItem } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { getEmbedVideoUrl } from '../utils/videoUtils';
+import { useAuth } from '../context/AuthContext';
+import { SkillexCertificateModal } from '../components/course/SkillexCertificateModal';
 
 interface CourseCardItem {
   id: number;
@@ -29,6 +33,9 @@ interface CourseCardItem {
 
 export const CoursesPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const studentName = user?.fullName || 'Prajwal Diggavi';
+
   const [courses, setCourses] = useState<CourseSummary[]>([]);
   const [activeLiveClass, setActiveLiveClass] = useState<LiveClassItem | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,6 +43,44 @@ export const CoursesPage: React.FC = () => {
   const [selectedCourseDetail, setSelectedCourseDetail] = useState<any | null>(null);
   const [activeCourseModal, setActiveCourseModal] = useState<any | null>(null);
   const [playingVideo, setPlayingVideo] = useState<{ title: string; videoUrl: string } | null>(null);
+
+  // Certificate Modal State
+  const [certificateCourse, setCertificateCourse] = useState<string | null>(null);
+
+  // Watched topics & progress tracking per course
+  const [watchedTopics, setWatchedTopics] = useState<Record<number, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('skillex_watched_topics');
+      return saved ? JSON.parse(saved) : { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true };
+    } catch {
+      return { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true };
+    }
+  });
+
+  const [courseProgressOverrides, setCourseProgressOverrides] = useState<Record<number, number>>(() => {
+    try {
+      const saved = localStorage.getItem('skillex_course_progress');
+      return saved ? JSON.parse(saved) : { 1: 100, 2: 75, 3: 40, 4: 15, 5: 60, 6: 0 };
+    } catch {
+      return { 1: 100, 2: 75, 3: 40, 4: 15, 5: 60, 6: 0 };
+    }
+  });
+
+  const markTopicWatched = (courseId: number, topicId: number) => {
+    setWatchedTopics((prev) => {
+      const updated = { ...prev, [topicId]: true };
+      localStorage.setItem('skillex_watched_topics', JSON.stringify(updated));
+      return updated;
+    });
+
+    setCourseProgressOverrides((prev) => {
+      const current = prev[courseId] || 0;
+      const next = Math.min(100, current + 25);
+      const updated = { ...prev, [courseId]: next };
+      localStorage.setItem('skillex_course_progress', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   // Fallback reference courses matching the exact cards shown in user's image
   const defaultCourses: CourseCardItem[] = [
@@ -385,53 +430,99 @@ export const CoursesPage: React.FC = () => {
 
       {/* 6-Column Responsive Course Cards Grid (Matching Image 1) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-        {filteredCourses.map((c) => (
-          <div
-            key={c.id}
-            onClick={() => handleOpenCourse(c)}
-            className="group bg-[#12151c] border border-[#1e2330] hover:border-[#2f394c] rounded-2xl overflow-hidden transition-all duration-200 cursor-pointer flex flex-col justify-between hover:-translate-y-1 shadow-sm"
-          >
-            {/* Course Thumbnail Banner */}
-            <div className="relative h-28 w-full bg-[#161922] overflow-hidden">
-              <img
-                src={c.thumbnail}
-                alt={c.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#12151c] via-transparent to-black/20" />
-            </div>
+        {filteredCourses.map((c) => {
+          const progress = courseProgressOverrides[c.id] ?? (c.id === 1 ? 100 : c.id === 2 ? 75 : c.id === 5 ? 60 : 40);
+          const isCompleted = progress === 100;
 
-            {/* Course Content Info */}
-            <div className="p-3.5 flex-1 flex flex-col justify-between space-y-3">
-              <div>
-                <h3 className="text-xs font-black text-white group-hover:text-[#38bdf8] transition-colors line-clamp-1">
-                  {c.title}
-                </h3>
+          return (
+            <div
+              key={c.id}
+              onClick={() => handleOpenCourse(c)}
+              className="group bg-[#12151c] border border-[#1e2330] hover:border-[#2f394c] rounded-2xl overflow-hidden transition-all duration-200 cursor-pointer flex flex-col justify-between hover:-translate-y-1 shadow-sm relative"
+            >
+              {/* Course Thumbnail Banner */}
+              <div className="relative h-28 w-full bg-[#161922] overflow-hidden">
+                <img
+                  src={c.thumbnail}
+                  alt={c.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#12151c] via-transparent to-black/20" />
 
-                {/* Modules & Duration Metadata */}
-                <div className="flex items-center gap-3 text-[10px] text-slate-400 mt-2 font-medium">
-                  <span className="flex items-center gap-1">
-                    <BookOpen className="w-3 h-3 text-slate-400" />
-                    <span>{c.modules} modules</span>
-                  </span>
-                  <span>•</span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-slate-400" />
-                    <span>{c.duration}</span>
-                  </span>
+                {/* 100% Completion Badge */}
+                {isCompleted && (
+                  <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-500/90 text-slate-950 text-[9px] font-black tracking-wide flex items-center gap-1 shadow-lg shadow-emerald-950/40 border border-emerald-300/40">
+                    <Award className="w-3 h-3 fill-slate-950" />
+                    <span>COMPLETED</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Course Content Info */}
+              <div className="p-3.5 flex-1 flex flex-col justify-between space-y-3">
+                <div>
+                  <h3 className="text-xs font-black text-white group-hover:text-[#38bdf8] transition-colors line-clamp-1">
+                    {c.title}
+                  </h3>
+
+                  {/* Modules & Duration Metadata */}
+                  <div className="flex items-center gap-3 text-[10px] text-slate-400 mt-2 font-medium">
+                    <span className="flex items-center gap-1">
+                      <BookOpen className="w-3 h-3 text-slate-400" />
+                      <span>{c.modules} modules</span>
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-slate-400" />
+                      <span>{c.duration}</span>
+                    </span>
+                  </div>
+
+                  {/* Video Watched Progress Bar */}
+                  <div className="space-y-1 pt-2.5">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-slate-400 font-semibold">Video Progress</span>
+                      <span className={isCompleted ? 'text-emerald-400 font-bold' : 'text-[#38bdf8] font-bold'}>
+                        {progress}%
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          isCompleted
+                            ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                            : 'bg-gradient-to-r from-[#38bdf8] to-blue-500'
+                        }`}
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Link: Get Started or View Certificate */}
+                <div className="pt-2 border-t border-[#1a1f2c] flex items-center justify-between">
+                  {isCompleted ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCertificateCourse(c.title);
+                      }}
+                      className="w-full py-1.5 px-2 rounded-lg bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-slate-950 text-[10px] font-black transition-all flex items-center justify-center gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer"
+                    >
+                      <Award className="w-3.5 h-3.5 fill-slate-950" />
+                      <span>Claim Skillex Certificate</span>
+                    </button>
+                  ) : (
+                    <span className="text-[11px] font-bold text-[#38bdf8] group-hover:text-sky-300 transition-colors flex items-center justify-between w-full">
+                      <span>Continue Video</span>
+                      <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                    </span>
+                  )}
                 </div>
               </div>
-
-              {/* Action Link: Get Started -> */}
-              <div className="pt-2 border-t border-[#1a1f2c] flex items-center justify-between">
-                <span className="text-[11px] font-bold text-[#38bdf8] group-hover:text-sky-300 transition-colors flex items-center gap-1">
-                  <span>Get Started</span>
-                  <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                </span>
-              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Curriculum Hierarchy & Recorded Class Preview Modal */}
@@ -472,37 +563,49 @@ export const CoursesPage: React.FC = () => {
                           </div>
 
                           <div className="space-y-1.5 pt-1">
-                            {m.topics?.map((t: any, tIdx: number) => (
-                              <div
-                                key={t.id || tIdx}
-                                className="p-2.5 bg-[#12151c] rounded-lg flex items-center justify-between text-xs hover:bg-[#181c26] transition-colors gap-3"
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <Play className="w-3.5 h-3.5 text-[#38bdf8] shrink-0" />
-                                  <span className="text-slate-200 font-medium truncate">{t.title}</span>
-                                </div>
+                            {m.topics?.map((t: any, tIdx: number) => {
+                              const isWatched = watchedTopics[t.id || tIdx];
+                              return (
+                                <div
+                                  key={t.id || tIdx}
+                                  className="p-2.5 bg-[#12151c] rounded-lg flex items-center justify-between text-xs hover:bg-[#181c26] transition-colors gap-3"
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    {isWatched ? (
+                                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 fill-emerald-500/20" />
+                                    ) : (
+                                      <Play className="w-3.5 h-3.5 text-[#38bdf8] shrink-0" />
+                                    )}
+                                    <span className={`font-medium truncate ${isWatched ? 'text-slate-300' : 'text-slate-200'}`}>
+                                      {t.title}
+                                    </span>
+                                  </div>
 
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <button
-                                    onClick={() => setPlayingVideo({
-                                      title: t.title,
-                                      videoUrl: t.videoUrl || 'https://www.youtube.com/watch?v=eIrMbG46SuE'
-                                    })}
-                                    className="px-3 py-1 bg-[#38bdf8] hover:bg-sky-400 text-slate-950 rounded-lg text-[11px] font-black transition-colors flex items-center gap-1 shadow-sm"
-                                  >
-                                    <Play className="w-3 h-3 fill-current" />
-                                    <span>Play Video</span>
-                                  </button>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                      onClick={() => {
+                                        markTopicWatched(activeCourseModal?.id || 1, t.id || tIdx);
+                                        setPlayingVideo({
+                                          title: t.title,
+                                          videoUrl: t.videoUrl || 'https://www.youtube.com/watch?v=eIrMbG46SuE',
+                                        });
+                                      }}
+                                      className="px-3 py-1 bg-[#38bdf8] hover:bg-sky-400 text-slate-950 rounded-lg text-[11px] font-black transition-colors flex items-center gap-1 shadow-sm cursor-pointer"
+                                    >
+                                      <Play className="w-3 h-3 fill-current" />
+                                      <span>{isWatched ? 'Rewatch' : 'Play Video'}</span>
+                                    </button>
 
-                                  <Link
-                                    to={`/topics/${t.id || 1}`}
-                                    className="px-2.5 py-1 bg-[#181c26] hover:bg-[#222838] border border-[#2a3040] text-slate-300 rounded-lg text-[11px] font-bold transition-colors"
-                                  >
-                                    Full Notes
-                                  </Link>
+                                    <Link
+                                      to={`/topics/${t.id || 1}`}
+                                      className="px-2.5 py-1 bg-[#181c26] hover:bg-[#222838] border border-[#2a3040] text-slate-300 rounded-lg text-[11px] font-bold transition-colors"
+                                    >
+                                      Full Notes
+                                    </Link>
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       ))}
@@ -510,6 +613,34 @@ export const CoursesPage: React.FC = () => {
                   </div>
                 ))
               )}
+
+              {/* Completion & Certificate Banner inside Modal */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-[#12151c] border border-amber-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 shrink-0">
+                    <Award className="w-5 h-5 fill-amber-400/20" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-black text-amber-300 flex items-center gap-1.5">
+                      <span>Official Skillex Academy Certificate</span>
+                      <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-200 text-[9px] font-bold border border-amber-500/30">
+                        100% Verified
+                      </span>
+                    </h5>
+                    <p className="text-[11px] text-slate-400">
+                      Complete this course to unlock your LinkedIn-shareable certificate with verification ID.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setCertificateCourse(activeCourseModal.title)}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-slate-950 text-xs font-black transition-all flex items-center gap-2 shadow-md shadow-amber-950/40 shrink-0 cursor-pointer"
+                >
+                  <Award className="w-4 h-4 fill-slate-950" />
+                  <span>Claim Certificate</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -561,6 +692,14 @@ export const CoursesPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Skillex Academy Verified Certificate Modal */}
+      <SkillexCertificateModal
+        isOpen={!!certificateCourse}
+        onClose={() => setCertificateCourse(null)}
+        courseTitle={certificateCourse || ''}
+        studentName={studentName}
+      />
     </div>
   );
 };

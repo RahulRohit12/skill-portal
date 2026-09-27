@@ -19,7 +19,11 @@ import {
   LogOut,
   CheckCircle2,
   AlertCircle,
-  ScanLine
+  ScanLine,
+  TrendingUp,
+  Award,
+  Target,
+  X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -35,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [showQrModal, setShowQrModal] = useState(false);
+  const [showReadinessModal, setShowReadinessModal] = useState(false);
 
   // Student Initials
   const initials = user?.fullName
@@ -202,21 +207,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
           </nav>
         </div>
 
-        {/* Bottom Section: Employability Score, Theme Switcher & Profile Card */}
+        {/* Bottom Section: Placement Readiness Score, Theme Switcher & Profile Card */}
         <div className="p-3 border-t border-[#191c24] space-y-2.5 bg-[#0a0c10]">
-          {/* Employability Score Widget */}
-          <div className="flex items-center gap-3 p-2 rounded-xl bg-[#12151c] border border-[#1e2330]">
-            <div className="relative w-8 h-8 rounded-full border-2 border-slate-700 flex items-center justify-center text-[11px] font-black text-white shrink-0">
-              0
+          {/* Placement Readiness Score Widget */}
+          <div
+            onClick={() => setShowReadinessModal(true)}
+            className="flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-[#12151c] to-[#161c28] border border-emerald-500/30 hover:border-emerald-500/60 transition-all cursor-pointer group shadow-sm"
+            title="Click to view detailed Placement Readiness breakdown"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="relative w-8 h-8 rounded-full bg-emerald-500/10 border-2 border-emerald-500/40 flex items-center justify-center text-[11px] font-black text-emerald-400 shrink-0 group-hover:scale-105 transition-transform">
+                85
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[9px] font-extrabold text-emerald-400 tracking-wider flex items-center gap-1 uppercase">
+                  <span>PLACEMENT READINESS</span>
+                </span>
+                <span className="text-xs font-black text-white flex items-center gap-1">
+                  85% <span className="text-[10px] text-slate-400 font-normal">/ 100</span>
+                </span>
+              </div>
             </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                EMPLOYABILITY SCORE
-              </span>
-              <span className="text-xs font-black text-slate-200">
-                0 <span className="text-[10px] text-slate-400 font-normal">/ 100</span>
-              </span>
-            </div>
+            <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[9px] font-bold shrink-0 border border-emerald-500/30">
+              Ready ⭐
+            </span>
           </div>
 
           {/* Light / Dark Mode Pill Toggle */}
@@ -277,6 +291,111 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
 
       {/* Official Student QR Identity Modal */}
       <StudentQrModal isOpen={showQrModal} onClose={() => setShowQrModal(false)} />
+
+      {/* Placement Readiness Score Breakdown Modal */}
+      {showReadinessModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          onClick={() => setShowReadinessModal(false)}
+        >
+          <div
+            className="bg-[#0e1118] border border-[#1f2430] w-full max-w-md rounded-3xl p-6 space-y-5 shadow-2xl relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-[#1f2430]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                  <Award className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">Placement Readiness Score</h3>
+                  <p className="text-[11px] text-slate-400">Official Campus & Off-Campus Hiring Index</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowReadinessModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-[#181c26]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Big Score Gauge Card */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-950/30 via-[#12151c] to-[#12151c] border border-emerald-500/30 flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-black text-emerald-400 flex items-baseline gap-1">
+                  85 <span className="text-sm font-semibold text-slate-400">/ 100</span>
+                </div>
+                <div className="text-xs font-bold text-slate-200 mt-0.5">
+                  Tier-1 Placement Ready ⭐
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">
+                  Eligible for top product company drives & interview shortlists.
+                </p>
+              </div>
+              <div className="w-16 h-16 rounded-full bg-emerald-500/10 border-4 border-emerald-500/50 flex flex-col items-center justify-center shadow-lg shadow-emerald-950/40">
+                <span className="text-base font-black text-emerald-400">85%</span>
+                <span className="text-[8px] font-bold text-slate-400">INDEX</span>
+              </div>
+            </div>
+
+            {/* Score Breakdown Factors */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                Evaluation Factors & Weights
+              </h4>
+
+              {/* Attendance */}
+              <div className="p-3 rounded-xl bg-[#131620] border border-[#1f2430] space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-300 font-semibold flex items-center gap-1.5">
+                    <span>📅</span> Lecture & Live Class Attendance
+                  </span>
+                  <span className="font-black text-emerald-400">92%</span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: '92%' }} />
+                </div>
+                <span className="text-[10px] text-slate-500">Weight: 35% • Consistent daily attendance</span>
+              </div>
+
+              {/* Coding & Assignments */}
+              <div className="p-3 rounded-xl bg-[#131620] border border-[#1f2430] space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-300 font-semibold flex items-center gap-1.5">
+                    <span>💻</span> Coding Labs & Assignments
+                  </span>
+                  <span className="font-black text-sky-400">84%</span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-sky-500 rounded-full" style={{ width: '84%' }} />
+                </div>
+                <span className="text-[10px] text-slate-500">Weight: 35% • High test case pass rate</span>
+              </div>
+
+              {/* Assessments */}
+              <div className="p-3 rounded-xl bg-[#131620] border border-[#1f2430] space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-300 font-semibold flex items-center gap-1.5">
+                    <span>📝</span> Assessments & MCQ Quizzes
+                  </span>
+                  <span className="font-black text-purple-400">78%</span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-purple-500 rounded-full" style={{ width: '78%' }} />
+                </div>
+                <span className="text-[10px] text-slate-500">Weight: 30% • Above cohort benchmark</span>
+              </div>
+            </div>
+
+            {/* Recruiter Badge */}
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-300 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Student profile is actively tagged as <strong>Placement Ready</strong> for 2026 hiring recruiters.</span>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

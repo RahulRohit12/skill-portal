@@ -1066,3 +1066,34 @@ export interface StartLiveClassRequest {
   meetingLink: string;
 }
 
+export interface JobItem {
+  id: number;
+  externalId?: string;
+  title: string;
+  company: string;
+  location: string;
+  description: string;
+  requirements?: string;
+  tags?: string[];
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  applyUrl: string;
+  source: string;
+  sources?: string;
+  postedAt: string | null;
+  fetchedAt?: string | null;
+  firstSeenAt?: string | null;
+  lastSeenAt?: string | null;
+  isFresherEligible?: boolean;
+  is2026Eligible?: boolean;
+  skills?: string[];
+  experienceLevel?: string;
+  employmentType?: string;
+  relevanceScore?: number;
+  relevanceTier?: string;
+  matchReasons?: string[];
+  companyCareerUrl?: string | null;
+  status?: string;
+}
+
+
