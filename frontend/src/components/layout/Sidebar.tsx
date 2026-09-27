@@ -46,6 +46,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isHovered, setIsHovered] = useState(false);
+  // On desktop (lg), expansion is controlled by mouse hover (collapsed 84px -> expanded 288px)
+  // On mobile devices (< lg), when the sidebar is open, it MUST always be fully expanded with text visible
+  const isExpanded = isOpen || isHovered;
 
   const fetchUnreadCount = () => {
     api.get('/notifications')
@@ -143,38 +146,42 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       {isOpen && (
         <div
           onClick={onCloseMobile}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 lg:hidden"
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 lg:hidden"
         />
       )}
 
-      {/* Sidebar Container: Collapsed (84px) on desktop, expands to 288px (w-72) on hover */}
+      {/* Sidebar Container: Collapsed (84px) on desktop, expands to 288px (w-72) on hover; Full drawer (w-72 sm:w-80) on mobile */}
       <aside
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className={`fixed top-0 bottom-0 left-0 z-40 h-screen bg-[#0c0e12] border-r border-[#191c24] transition-all duration-300 ease-in-out flex flex-col justify-between select-none ${
+        className={`fixed top-0 bottom-0 left-0 z-50 h-screen bg-[#0c0e12] border-r border-[#191c24] transition-all duration-300 ease-in-out flex flex-col justify-between select-none ${
           isOpen
-            ? 'translate-x-0 w-72'
-            : '-translate-x-full lg:translate-x-0 ' + (isHovered ? 'lg:w-72 shadow-2xl shadow-black/90 z-50' : 'lg:w-[84px]')
+            ? 'translate-x-0 w-72 sm:w-80 max-w-[85vw] shadow-2xl shadow-black/90'
+            : '-translate-x-full lg:translate-x-0 ' + (isHovered ? 'lg:w-72 shadow-2xl shadow-black/90' : 'lg:w-[84px]')
         }`}
       >
         {/* Top Header & Navigation */}
         <div className="flex-1 flex flex-col min-h-0 overflow-y-auto no-scrollbar">
           {/* Brand Logo & Notification Header */}
           <div className="pt-4 px-3.5 pb-2 flex items-center justify-between">
-            <NavLink to="/" className="flex items-center gap-3 group overflow-hidden">
+            <NavLink
+              to="/"
+              onClick={onCloseMobile}
+              className="flex items-center gap-3 group overflow-hidden"
+            >
               <div className="relative shrink-0">
                 <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#0077b6] via-[#0096c7] to-[#00c2ff] flex items-center justify-center text-white shadow-md shadow-cyan-500/30 border border-cyan-300/30">
                   <GraduationCap className="w-5 h-5 text-white" />
                 </div>
-                {/* Dynamic Notification Badge on Logo */}
-                {unreadCount > 0 && (
+                {/* Dynamic Notification Badge on Logo (only when collapsed icon-only) */}
+                {unreadCount > 0 && !isExpanded && (
                   <span className="absolute -top-1 -right-1.5 px-1.5 py-0.2 min-w-[18px] h-4.5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[#0c0e12] animate-pulse shadow-md shadow-rose-950/60">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
               </div>
 
-              {isHovered && (
+              {isExpanded && (
                 <div className="flex flex-col overflow-hidden animate-in fade-in duration-200">
                   <span className="font-black text-base sm:text-lg tracking-tight text-white leading-none whitespace-nowrap flex items-center">
                     <span>SKILL</span>
@@ -190,26 +197,38 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
               )}
             </NavLink>
 
-            {isHovered && (
-              <div className="relative animate-in fade-in duration-200">
-                <button
-                  onClick={() => setShowNotificationsModal(true)}
-                  className="p-2 text-slate-300 hover:text-white hover:bg-[#141722] rounded-xl transition-colors relative"
-                  title={unreadCount > 0 ? `${unreadCount} unread notification(s)` : 'Notifications'}
-                >
-                  <Bell className="w-5 h-5 text-slate-300" />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 px-1.5 min-w-[18px] h-4.5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[#0c0e12] shadow-md shadow-rose-950/50 animate-pulse">
-                      {unreadCount > 99 ? '99+' : unreadCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-            )}
+            {/* Actions in Header (Notification bell & mobile close X) */}
+            <div className="flex items-center gap-1">
+              {isExpanded && (
+                <div className="relative animate-in fade-in duration-200">
+                  <button
+                    onClick={() => setShowNotificationsModal(true)}
+                    className="p-2 text-slate-300 hover:text-white hover:bg-[#141722] rounded-xl transition-colors relative"
+                    title={unreadCount > 0 ? `${unreadCount} unread notification(s)` : 'Notifications'}
+                  >
+                    <Bell className="w-5 h-5 text-slate-300" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 px-1.5 min-w-[18px] h-4.5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[#0c0e12] shadow-md shadow-rose-950/50 animate-pulse">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* Close Button on Mobile Devices */}
+              <button
+                onClick={onCloseMobile}
+                className="p-2 text-slate-400 hover:text-white hover:bg-[#141722] rounded-xl transition-colors lg:hidden"
+                aria-label="Close Sidebar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
-          {/* Dedicated Collapsed Mode Notification Bell Button */}
-          {!isHovered && (
+          {/* Dedicated Collapsed Mode Notification Bell Button (Desktop only when not expanded) */}
+          {!isExpanded && (
             <div className="flex justify-center pb-2">
               <button
                 onClick={() => setShowNotificationsModal(true)}
@@ -228,7 +247,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
 
           {/* Quick Search Bar */}
           <div className="px-3 pb-2">
-            {isHovered ? (
+            {isExpanded ? (
               <div className="relative flex items-center animate-in fade-in duration-200">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5" />
                 <input
@@ -253,7 +272,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
           {/* Quick QR Code / Scanner Action */}
           <div className="px-3 py-1">
             {user?.role === 'ROLE_ADMIN' ? (
-              isHovered ? (
+              isExpanded ? (
                 <NavLink
                   to="/admin/scanner"
                   onClick={onCloseMobile}
@@ -273,9 +292,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                   </NavLink>
                 </div>
               )
-            ) : isHovered ? (
+            ) : isExpanded ? (
               <button
-                onClick={() => setShowQrModal(true)}
+                onClick={() => {
+                  onCloseMobile();
+                  setShowQrModal(true);
+                }}
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-bold text-slate-200 hover:text-white bg-[#141722] hover:bg-[#1c2232] border border-[#1e2535] rounded-xl transition-all text-left animate-in fade-in duration-200 shadow-sm"
               >
                 <QrCode className="w-5 h-5 text-[#00c2ff] shrink-0" />
@@ -299,7 +321,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
             {navSections.map((section, sIdx) => (
               <div key={section.title} className="space-y-1">
                 {/* Section Title when Hovered / Expanded */}
-                {isHovered ? (
+                {isExpanded ? (
                   <div className="px-3 pt-2 pb-1 text-xs font-black tracking-wider text-slate-400 uppercase select-none animate-in fade-in duration-200">
                     {section.title}
                   </div>
@@ -319,8 +341,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                         onClick={onCloseMobile}
                         className={({ isActive }) =>
                           `flex items-center ${
-                            isHovered
-                              ? 'gap-3.5 px-3.5 py-2.5 justify-start'
+                            isExpanded
+                              ? 'gap-3.5 px-3.5 py-2.5 sm:py-3 justify-start'
                               : 'justify-center w-12 h-12 mx-auto'
                           } rounded-xl text-sm transition-all font-bold group select-none ${
                             isActive
@@ -328,7 +350,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                               : 'text-slate-300 hover:text-white hover:bg-[#141722] border border-transparent hover:border-[#1e2535]'
                           }`
                         }
-                        title={!isHovered ? item.label : undefined}
+                        title={!isExpanded ? item.label : undefined}
                       >
                         {({ isActive }) => (
                           <>
@@ -337,7 +359,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                                 isActive ? 'text-[#00c2ff]' : 'text-slate-400 group-hover:text-slate-200'
                               }`}
                             />
-                            {isHovered && (
+                            {isExpanded && (
                               <span className="truncate whitespace-nowrap text-sm font-bold animate-in fade-in duration-200">
                                 {item.label}
                               </span>
@@ -354,11 +376,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
         </div>
 
         {/* Bottom Section: Placement Readiness Score, Theme Switcher & Profile Card */}
-        <div className="p-3 border-t border-[#191c24] space-y-2.5 bg-[#0a0c10]">
+        <div className="p-3 border-t border-[#191c24] space-y-2.5 bg-[#0a0c10] shrink-0">
           {/* Placement Readiness Score Widget */}
-          {isHovered ? (
+          {isExpanded ? (
             <div
-              onClick={() => setShowReadinessModal(true)}
+              onClick={() => {
+                onCloseMobile();
+                setShowReadinessModal(true);
+              }}
               className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-[#12151c] to-[#161c28] border border-emerald-500/30 hover:border-emerald-500/60 transition-all cursor-pointer group shadow-sm animate-in fade-in duration-200"
               title="Click to view detailed Placement Readiness breakdown"
             >
@@ -392,7 +417,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
           )}
 
           {/* Light / Dark Mode Pill Toggle */}
-          {isHovered ? (
+          {isExpanded ? (
             <div className="p-1 rounded-xl bg-[#12151c] border border-[#1e2330] flex items-center justify-between text-xs animate-in fade-in duration-200">
               <button
                 onClick={() => theme === 'dark' && toggleTheme()}
@@ -430,7 +455,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
           )}
 
           {/* Student Profile User Bar */}
-          {isHovered ? (
+          {isExpanded ? (
             <div className="pt-1 flex items-center justify-between gap-2.5 animate-in fade-in duration-200">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-full bg-[#0284c7] text-white flex items-center justify-center text-sm font-black shrink-0 border border-sky-400/40">
@@ -450,7 +475,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
               </div>
 
               <button
-                onClick={handleLogout}
+                onClick={() => {
+                  onCloseMobile();
+                  handleLogout();
+                }}
                 className="p-2 text-slate-400 hover:text-rose-400 hover:bg-[#1a1f2c] rounded-xl transition-colors shrink-0"
                 title="Sign Out"
               >
