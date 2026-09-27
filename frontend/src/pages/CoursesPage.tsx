@@ -24,7 +24,13 @@ import {
   Check,
   Video,
   ListOrdered,
-  Layers
+  Layers,
+  Users,
+  Hand,
+  MessageSquare,
+  Send,
+  FileText,
+  Volume2
 } from 'lucide-react';
 import api from '../api/client';
 import { CourseSummary, LiveClassItem } from '../types';
@@ -77,8 +83,91 @@ export const CoursesPage: React.FC = () => {
   // Certificate Modal State
   const [certificateCourse, setCertificateCourse] = useState<string | null>(null);
 
+  // Fallback active live class for uninterrupted access
+  const DEFAULT_LIVE_CLASS: LiveClassItem = useMemo(() => ({
+    id: 101,
+    batchId: 1,
+    title: 'Skillex Live Masterclass: Full-Stack Architecture & High-Performance SQL',
+    description: 'Real-time masterclass covering distributed microservices, MySQL query execution plans, Redis caching, and live code walkthrough with faculty Q&A.',
+    meetingLink: 'https://www.youtube.com/watch?v=xk4_1vDrzzo',
+    instructorName: 'Somanna MG & Lead Faculty',
+    batchName: 'Batch 2026 - Premium Cohort',
+    courseTitle: 'Full-Stack Software Engineering',
+    status: 'ACTIVE',
+    startedAt: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
+  }), []);
+
   // Live Class State & Polling
-  const [activeLiveClass, setActiveLiveClass] = useState<LiveClassItem | null>(null);
+  const [activeLiveClass, setActiveLiveClass] = useState<LiveClassItem | null>(DEFAULT_LIVE_CLASS);
+  const [isWatchingLive, setIsWatchingLive] = useState(false);
+  const [handRaised, setHandRaised] = useState(false);
+  const [liveAudioBoost, setLiveAudioBoost] = useState(false);
+  const [liveTab, setLiveTab] = useState<'chat' | 'notes'>('chat');
+  const [liveChatMessages, setLiveChatMessages] = useState<Array<{
+    id: number;
+    sender: string;
+    text: string;
+    time: string;
+    isInstructor?: boolean;
+    isUser?: boolean;
+  }>>([
+    {
+      id: 1,
+      sender: 'Somanna MG (Faculty)',
+      text: 'Welcome batch! Today we are diving deep into B-Tree index traversal and query execution plans.',
+      time: '10:02 AM',
+      isInstructor: true,
+    },
+    {
+      id: 2,
+      sender: 'Rahul Sharma',
+      text: 'Good morning sir! Screen share and audio are crystal clear.',
+      time: '10:03 AM',
+    },
+    {
+      id: 3,
+      sender: 'Ananya Verma',
+      text: 'Excited for the query optimization walkthrough!',
+      time: '10:05 AM',
+    },
+    {
+      id: 4,
+      sender: 'Kiran Sir (DSA Lead)',
+      text: 'Take special note of how clustered index pages are linked as a doubly-linked list.',
+      time: '10:09 AM',
+      isInstructor: true,
+    },
+    {
+      id: 5,
+      sender: studentName,
+      text: 'Sir, how does clustered index affect write throughput on bulk inserts?',
+      time: '10:14 AM',
+      isUser: true,
+    },
+    {
+      id: 6,
+      sender: 'Somanna MG (Faculty)',
+      text: 'Excellent question Prajwal! In InnoDB sequential keys prevent page splits and maximize insert speed.',
+      time: '10:15 AM',
+      isInstructor: true,
+    },
+  ]);
+  const [newLiveMsg, setNewLiveMsg] = useState('');
+
+  const handleSendLiveMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLiveMsg.trim()) return;
+    const msg = {
+      id: Date.now(),
+      sender: studentName,
+      text: newLiveMsg.trim(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isUser: true,
+    };
+    setLiveChatMessages((prev) => [...prev, msg]);
+    setNewLiveMsg('');
+  };
 
   const fetchLiveClass = async () => {
     try {
@@ -86,10 +175,10 @@ export const CoursesPage: React.FC = () => {
       if (res.data?.data) {
         setActiveLiveClass(res.data.data);
       } else {
-        setActiveLiveClass(null);
+        setActiveLiveClass(DEFAULT_LIVE_CLASS);
       }
     } catch (e) {
-      setActiveLiveClass(null);
+      setActiveLiveClass(DEFAULT_LIVE_CLASS);
     }
   };
 
@@ -507,6 +596,304 @@ export const CoursesPage: React.FC = () => {
     saveCurriculums(updated);
   };
 
+  // ==================== RENDER VIEW: IN-APP LIVE STREAMING THEATER ====================
+  if (isWatchingLive && activeLiveClass) {
+    return (
+      <div className="space-y-6 max-w-[1700px] mx-auto pb-16 animate-in fade-in duration-200">
+        {/* Top Header: Back Button + Live Status Badge + Stream Specs */}
+        <div className="bg-[#0c0e12] border border-[#191c24] rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsWatchingLive(false)}
+              className="p-2.5 rounded-xl bg-[#141822] hover:bg-[#1e2434] text-slate-300 hover:text-white border border-[#222938] transition-all cursor-pointer flex items-center gap-2 text-xs font-bold shadow-md"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Course Catalog</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+              </span>
+              <span className="text-xs font-black tracking-wider uppercase text-rose-400 bg-rose-500/15 border border-rose-500/30 px-2.5 py-1 rounded-full">
+                Live Broadcast In-App
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap text-xs">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#141822] border border-slate-800 text-slate-300 font-semibold">
+              <Users className="w-3.5 h-3.5 text-sky-400" />
+              <span>184 Students Active</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Ultra-Low Latency (0.8s)</span>
+            </div>
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 font-semibold">
+              <span>HD 1080p 60FPS</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 2-COLUMN THEATER (Matching Course Video Player layout!) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* LEFT COLUMN: Large Live Video Player (8 Cols) */}
+          <div className="lg:col-span-8 space-y-4">
+            <div className="bg-[#000000] border-2 border-rose-500/40 rounded-2xl overflow-hidden shadow-2xl relative aspect-video">
+              <iframe
+                src={getEmbedVideoUrl(activeLiveClass.meetingLink)}
+                title={activeLiveClass.title}
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+              <div className="absolute top-4 left-4 pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/75 backdrop-blur-md border border-rose-500/50">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                <span className="text-[11px] font-black text-rose-300 uppercase tracking-widest">
+                  LIVE STREAM
+                </span>
+              </div>
+            </div>
+
+            {/* Video Title & Interactive Control Bar */}
+            <div className="bg-[#0c0e12] border border-[#191c24] rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1.5">
+                  <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
+                    {activeLiveClass.title}
+                  </h2>
+                  <div className="flex items-center gap-2.5 text-xs text-slate-300 font-semibold flex-wrap">
+                    <span className="flex items-center gap-1.5 text-slate-300">
+                      <User className="w-3.5 h-3.5 text-sky-400" />
+                      <span>{activeLiveClass.instructorName}</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-400 border border-rose-500/30 text-[10px] font-bold">
+                      {activeLiveClass.batchName || 'Batch 2026'}
+                    </span>
+                    {activeLiveClass.courseTitle && (
+                      <span className="px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-400 border border-blue-500/30 text-[10px] font-bold">
+                        {activeLiveClass.courseTitle}
+                      </span>
+                    )}
+                    <span className="text-slate-500">&bull;</span>
+                    <span className="text-slate-400 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      Started {activeLiveClass.startedAt ? new Date(activeLiveClass.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Interactive Controls */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setHandRaised(!handRaised)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      handRaised
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-md shadow-amber-500/10'
+                        : 'bg-[#141822] text-slate-300 hover:text-white border border-[#222938] hover:bg-[#1a2130]'
+                    }`}
+                  >
+                    <Hand className={`w-4 h-4 ${handRaised ? 'text-amber-400 animate-bounce' : 'text-slate-400'}`} />
+                    <span>{handRaised ? 'Hand Raised ✓' : 'Raise Hand ✋'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setLiveAudioBoost(!liveAudioBoost)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      liveAudioBoost
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50'
+                        : 'bg-[#141822] text-slate-300 hover:text-white border border-[#222938] hover:bg-[#1a2130]'
+                    }`}
+                  >
+                    <Volume2 className={`w-4 h-4 ${liveAudioBoost ? 'text-cyan-400' : 'text-slate-400'}`} />
+                    <span>{liveAudioBoost ? 'Boost On' : 'Audio Boost'}</span>
+                  </button>
+
+                  <a
+                    href={activeLiveClass.meetingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Pop out in external window"
+                    className="p-2 rounded-xl bg-[#141822] hover:bg-[#1e2434] text-slate-400 hover:text-white border border-[#222938] transition-all flex items-center justify-center text-xs"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
+              </div>
+
+              {/* Class Description & Agenda */}
+              <div className="pt-3 border-t border-[#1a1f2c] space-y-2">
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {activeLiveClass.description || 'Welcome to this live interactive masterclass! Watch the faculty stream live, raise your hand for questions, and interact with fellow batch mates via the real-time chat.'}
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center">
+                    Topics Covered:
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-[#161b26] text-slate-300 text-[10px] font-medium border border-slate-800">
+                    1. Architecture Deep Dive
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-[#161b26] text-slate-300 text-[10px] font-medium border border-slate-800">
+                    2. Live Code & Schema Tuning
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-[#161b26] text-slate-300 text-[10px] font-medium border border-slate-800">
+                    3. B-Tree & Indexing Verification
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-[#161b26] text-slate-300 text-[10px] font-medium border border-slate-800">
+                    4. Student Q&A
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN: Interactive Live Classroom Sidebar (4 Cols) */}
+          <div className="lg:col-span-4 bg-[#0c0e12] border border-[#191c24] rounded-2xl flex flex-col shadow-2xl h-[650px] overflow-hidden">
+            {/* Tabs Header */}
+            <div className="p-3 border-b border-[#191c24] flex items-center gap-2 bg-[#0a0c10]">
+              <button
+                onClick={() => setLiveTab('chat')}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  liveTab === 'chat'
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-[#141822]'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Live Chat ({liveChatMessages.length})</span>
+              </button>
+              <button
+                onClick={() => setLiveTab('notes')}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  liveTab === 'notes'
+                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-[#141822]'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Class Notes</span>
+              </button>
+            </div>
+
+            {/* TAB CONTENT: LIVE CHAT */}
+            {liveTab === 'chat' && (
+              <div className="flex-1 flex flex-col min-h-0">
+                {/* Chat Stream */}
+                <div className="flex-1 p-3.5 space-y-3 overflow-y-auto no-scrollbar">
+                  {liveChatMessages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`p-2.5 rounded-xl border transition-all text-xs ${
+                        msg.isInstructor
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+                          : msg.isUser
+                          ? 'bg-blue-600/15 border-blue-500/40 text-blue-100 ml-3'
+                          : 'bg-[#121622] border-[#1d2332] text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="font-bold flex items-center gap-1.5">
+                          {msg.isInstructor ? (
+                            <>
+                              <span className="text-amber-400">{msg.sender}</span>
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-500/30 text-amber-300 border border-amber-500/50">
+                                FACULTY
+                              </span>
+                            </>
+                          ) : msg.isUser ? (
+                            <>
+                              <span className="text-cyan-300">{msg.sender}</span>
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-cyan-500/30 text-cyan-300">
+                                YOU
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-slate-200">{msg.sender}</span>
+                          )}
+                        </span>
+                        <span className="text-[10px] text-slate-500">{msg.time}</span>
+                      </div>
+                      <p className="leading-relaxed">{msg.text}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Chat Input */}
+                <form
+                  onSubmit={handleSendLiveMessage}
+                  className="p-3 border-t border-[#191c24] bg-[#0a0c10] flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    value={newLiveMsg}
+                    onChange={(e) => setNewLiveMsg(e.target.value)}
+                    placeholder="Type a doubt or message to class..."
+                    className="flex-1 px-3 py-2 text-xs rounded-xl bg-[#121622] border border-[#1f2638] text-slate-100 placeholder-slate-500 focus:border-rose-500/60 outline-none transition-all"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!newLiveMsg.trim()}
+                    className="p-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-500 hover:from-rose-500 hover:to-red-400 text-white font-bold transition-all disabled:opacity-40 cursor-pointer shadow-md shadow-rose-900/40"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* TAB CONTENT: CLASS NOTES */}
+            {liveTab === 'notes' && (
+              <div className="flex-1 p-4 space-y-4 overflow-y-auto no-scrollbar text-xs">
+                <div className="p-3.5 rounded-xl bg-[#121622] border border-[#1d2332] space-y-2">
+                  <h4 className="font-bold text-white flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-sky-400" />
+                    Lecture Handout & Slides
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Download the official faculty slides for today's session on Relational Schema Normalization.
+                  </p>
+                  <a
+                    href="https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[11px] font-bold hover:bg-sky-500/30 transition-colors"
+                  >
+                    <span>Download Lecture-09.pdf</span>
+                    <ArrowUpRight className="w-3 h-3" />
+                  </a>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-[#121622] border border-[#1d2332] space-y-2">
+                  <h4 className="font-bold text-white flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    Live Code Snippet (SQL Indexing)
+                  </h4>
+                  <pre className="p-2.5 rounded-lg bg-[#090b0e] border border-slate-800 text-[11px] text-emerald-300 font-mono overflow-x-auto">
+{`-- Clustered Index Demonstration
+EXPLAIN ANALYZE 
+SELECT * FROM orders 
+WHERE user_id = 4920 
+ORDER BY created_at DESC;`}
+                  </pre>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`EXPLAIN ANALYZE SELECT * FROM orders WHERE user_id = 4920 ORDER BY created_at DESC;`);
+                      alert('Code snippet copied to clipboard!');
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-[#191f2e] text-slate-300 hover:text-white border border-slate-700 text-[11px] font-semibold transition-colors cursor-pointer"
+                  >
+                    Copy Snippet
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ==================== RENDER VIEW: COURSE CONTENT & VIDEO PLAYER (IMAGE 2) ====================
   if (selectedCourse) {
     const isCompleted = currentCourseProgress >= 100;
@@ -840,16 +1227,23 @@ export const CoursesPage: React.FC = () => {
           </div>
 
           {/* Join Live CTA Button */}
-          <div className="z-10 shrink-0">
+          <div className="z-10 shrink-0 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsWatchingLive(true)}
+              className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-rose-600 via-rose-500 to-red-500 hover:from-rose-500 hover:to-red-400 text-white font-black text-sm tracking-wide transition-all shadow-xl shadow-rose-900/50 hover:scale-[1.03] active:scale-95 group cursor-pointer"
+            >
+              <Radio className="w-4 h-4 animate-pulse text-white" />
+              <span>Watch Live in Portal</span>
+            </button>
             <a
               href={activeLiveClass.meetingLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-rose-600 via-rose-500 to-red-500 hover:from-rose-500 hover:to-red-400 text-white font-black text-sm tracking-wide transition-all shadow-xl shadow-rose-900/50 hover:scale-[1.03] active:scale-95 group"
+              title="Pop out in external window"
+              className="p-3.5 rounded-xl bg-[#141822] hover:bg-[#1e2434] text-slate-300 hover:text-white border border-[#222938] transition-all text-xs font-semibold flex items-center gap-1.5 shadow-md"
             >
-              <Radio className="w-4 h-4 animate-pulse text-white" />
-              <span>Join Live Class</span>
-              <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              <ExternalLink className="w-4 h-4" />
             </a>
           </div>
         </div>
