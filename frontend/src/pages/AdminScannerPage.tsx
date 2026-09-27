@@ -157,11 +157,12 @@ export const AdminScannerPage: React.FC = () => {
     setSavingSettings(true);
     setSaveSettingsNotice(null);
     try {
+      const cleanPass = smtpPasswordInput.trim().replace(/\s+/g, '');
       const res = await api.post('/admin/email/settings', {
         smtpHost: 'smtp.gmail.com',
-        smtpPort: 587,
+        smtpPort: 465,
         smtpUsername: smtpSenderEmail.trim(),
-        smtpPassword: smtpPasswordInput.trim().replace(/\s+/g, ''),
+        smtpPassword: cleanPass,
         defaultStudentEmail: studentCustomEmail.trim() || 'diggaviprajwal55@gmail.com',
       });
       const data = res.data?.data;
@@ -172,7 +173,7 @@ export const AdminScannerPage: React.FC = () => {
       }
       fetchEmailStatus();
     } catch (err: any) {
-      setSaveSettingsNotice(`Failed to connect: ${err.response?.data?.message || err.message}`);
+      setSaveSettingsNotice(`Notice: ${err.response?.data?.message || err.message}`);
     } finally {
       setSavingSettings(false);
     }

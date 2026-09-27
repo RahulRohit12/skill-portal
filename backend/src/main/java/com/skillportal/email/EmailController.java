@@ -22,20 +22,33 @@ public class EmailController {
     @GetMapping("/status")
     @Operation(summary = "Get current SMTP configuration status and recent dispatch audit logs")
     public ResponseEntity<ApiResponse<EmailDto.EmailDiagnosticDto>> getEmailStatus() {
-        EmailDto.EmailDiagnosticDto status = emailService.getEmailStatus();
-        return ResponseEntity.ok(ApiResponse.success(status));
+        try {
+            EmailDto.EmailDiagnosticDto status = emailService.getEmailStatus();
+            return ResponseEntity.ok(ApiResponse.success(status));
+        } catch (Exception ex) {
+            EmailDto.EmailDiagnosticDto fallback = new EmailDiagnosticDto();
+            fallback.setStatusMessage("Diagnostics notice: " + ex.getMessage());
+            return ResponseEntity.ok(ApiResponse.success(fallback));
+        }
     }
 
     @PostMapping("/test")
     @Operation(summary = "Send a live diagnostic test email to any specified recipient")
     public ResponseEntity<ApiResponse<EmailDto.EmailTestResult>> sendTestEmail(
             @RequestBody EmailDto.EmailTestRequest request) {
-        String target = request != null ? request.getTo() : null;
-        EmailDto.EmailTestResult result = emailService.sendTestEmail(target);
-        if (result.isSuccess()) {
-            return ResponseEntity.ok(ApiResponse.success(result.getMessage(), result));
-        } else {
-            return ResponseEntity.ok(ApiResponse.error(result.getMessage(), result));
+        try {
+            String target = request != null ? request.getTo() : null;
+            EmailDto.EmailTestResult result = emailService.sendTestEmail(target);
+            if (result.isSuccess()) {
+                return ResponseEntity.ok(ApiResponse.success(result.getMessage(), result));
+            } else {
+                return ResponseEntity.ok(ApiResponse.error(result.getMessage(), result));
+            }
+        } catch (Exception ex) {
+            EmailDto.EmailTestResult errorRes = new EmailDto.EmailTestResult();
+            errorRes.setSuccess(false);
+            errorRes.setMessage("Test dispatch error: " + ex.getMessage());
+            return ResponseEntity.ok(ApiResponse.error(errorRes.getMessage(), errorRes));
         }
     }
 
@@ -43,11 +56,18 @@ public class EmailController {
     @Operation(summary = "Save SMTP credentials and default student email directly to runtime database")
     public ResponseEntity<ApiResponse<EmailDto.EmailTestResult>> saveSettings(
             @RequestBody EmailDto.SaveSettingsRequest request) {
-        EmailDto.EmailTestResult result = emailService.saveSmtpSettings(request);
-        if (result.isSuccess()) {
-            return ResponseEntity.ok(ApiResponse.success("SMTP configuration saved and verified successfully!", result));
-        } else {
-            return ResponseEntity.ok(ApiResponse.error("Configuration saved, but test delivery notice: " + result.getMessage(), result));
+        try {
+            EmailDto.EmailTestResult result = emailService.saveSmtpSettings(request);
+            if (result.isSuccess()) {
+                return ResponseEntity.ok(ApiResponse.success("SMTP configuration saved and verified successfully!", result));
+            } else {
+                return ResponseEntity.ok(ApiResponse.error("Credentials saved, but verification notice: " + result.getMessage(), result));
+            }
+        } catch (Exception ex) {
+            EmailDto.EmailTestResult errResult = new EmailDto.EmailTestResult();
+            errResult.setSuccess(false);
+            errResult.setMessage("Settings error: " + ex.getMessage());
+            return ResponseEntity.ok(ApiResponse.error("Notice: " + ex.getMessage(), errResult));
         }
     }
 

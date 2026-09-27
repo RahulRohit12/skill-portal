@@ -37,7 +37,7 @@ public class EmailServiceImpl implements EmailService {
     @Value("${spring.mail.host:smtp.gmail.com}")
     private String mailHost;
 
-    @Value("${spring.mail.port:587}")
+    @Value("${spring.mail.port:465}")
     private int mailPort;
 
     @Value("${app.frontend.url:https://skill-portal-1-mn1n.onrender.com}")
@@ -68,40 +68,88 @@ public class EmailServiceImpl implements EmailService {
                         try { mailPort = Integer.parseInt(val); } catch (Exception ignored) {}
                     }
                     else if ("smtp_username".equalsIgnoreCase(key)) mailUsername = val;
-                    else if ("smtp_password".equalsIgnoreCase(key)) mailPassword = val;
+                    else if ("smtp_password".equalsIgnoreCase(key)) mailPassword = val.replaceAll("\\s+", "");
                 }
             });
-            // Reset cached sender to pick up refreshed DB properties
             this.mailSender = null;
         } catch (Exception e) {
             log.debug("Database settings load skipped: {}", e.getMessage());
         }
     }
 
-    private synchronized JavaMailSender getEffectiveMailSender() {
-        if (this.mailSender != null) {
-            return this.mailSender;
-        }
-
+    private JavaMailSender buildSenderForPort(String host, int port, String user, String pass) {
         JavaMailSenderImpl impl = new JavaMailSenderImpl();
-        impl.setHost(mailHost != null && !mailHost.trim().isEmpty() ? mailHost.trim() : "smtp.gmail.com");
-        impl.setPort(mailPort > 0 ? mailPort : 587);
-        if (mailUsername != null) impl.setUsername(mailUsername.trim());
-        if (mailPassword != null) impl.setPassword(mailPassword.trim());
+        impl.setHost(host != null && !host.trim().isEmpty() ? host.trim() : "smtp.gmail.com");
+        impl.setPort(port > 0 ? port : 465);
+        if (user != null) impl.setUsername(user.trim());
+        if (pass != null) {
+            impl.setPassword(pass.replaceAll("\\s+", "").trim());
+        }
 
         Properties props = impl.getJavaMailProperties();
         props.put("mail.transport.protocol", "smtp");
         props.put("mail.smtp.auth", "true");
-        props.put("mail.smtp.starttls.enable", "true");
-        props.put("mail.smtp.starttls.required", "true");
         props.put("mail.smtp.ssl.trust", "*");
-        props.put("mail.smtp.ssl.protocols", "TLSv1.2 TLSv1.3");
-        props.put("mail.smtp.connectiontimeout", "15000");
-        props.put("mail.smtp.timeout", "15000");
-        props.put("mail.smtp.writetimeout", "15000");
+        props.put("mail.smtp.connectiontimeout", "8000");
+        props.put("mail.smtp.timeout", "8000");
+        props.put("mail.smtp.writetimeout", "8000");
 
-        this.mailSender = impl;
+        if (port == 465) {
+            props.put("mail.smtp.ssl.enable", "true");
+            props.put("mail.smtp.socketFactory.port", "465");
+            props.put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
+            props.put("mail.smtp.socketFactory.fallback", "false");
+        } else {
+            props.put("mail.smtp.starttls.enable", "true");
+            props.put("mail.smtp.starttls.required", "true");
+            props.put("mail.smtp.ssl.protocols", "TLSv1.2 TLSv1.3");
+        }
+
         return impl;
+    }
+
+    private boolean sendViaSmtpWithFallback(String targetEmail, String subject, String plainText, String htmlContent) throws Exception {
+        int primaryPort = (mailPort > 0) ? mailPort : 465;
+        int secondaryPort = (primaryPort == 465) ? 587 : 465;
+
+        Exception firstEx = null;
+        try {
+            JavaMailSender primarySender = buildSenderForPort(mailHost, primaryPort, mailUsername, mailPassword);
+            MimeMessage msg = primarySender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
+            helper.setFrom(mailUsername.trim(), "SkillX Academy");
+            helper.setTo(targetEmail);
+            helper.setSubject(subject);
+            helper.setText(plainText, htmlContent);
+
+            primarySender.send(msg);
+            this.mailPort = primaryPort;
+            return true;
+        } catch (Exception ex) {
+            firstEx = ex;
+            log.warn("SMTP attempt to {} on port {} failed: {}. Retrying on fallback port {}...",
+                    targetEmail, primaryPort, ex.getMessage(), secondaryPort);
+        }
+
+        // Fallback retry
+        try {
+            JavaMailSender fallbackSender = buildSenderForPort(mailHost, secondaryPort, mailUsername, mailPassword);
+            MimeMessage msg = fallbackSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
+            helper.setFrom(mailUsername.trim(), "SkillX Academy");
+            helper.setTo(targetEmail);
+            helper.setSubject(subject);
+            helper.setText(plainText, htmlContent);
+
+            fallbackSender.send(msg);
+            this.mailPort = secondaryPort; // Adapt active port to working one
+            log.info("SMTP delivery to {} succeeded via fallback port {}", targetEmail, secondaryPort);
+            return true;
+        } catch (Exception ex2) {
+            log.error("Both SMTP ports ({} and {}) failed for {}: {}", primaryPort, secondaryPort, targetEmail, ex2.getMessage());
+            String errDetail = "Port " + primaryPort + ": " + (firstEx != null ? firstEx.getMessage() : "failed") + " | Port " + secondaryPort + ": " + ex2.getMessage();
+            throw new Exception(errDetail);
+        }
     }
 
     private boolean isSmtpConfigured() {
@@ -133,7 +181,6 @@ public class EmailServiceImpl implements EmailService {
             String attendanceTime,
             String sessionTitle) {
 
-        // Auto-route mock/empty email to live recipient
         String resolvedEmail = recipientEmail;
         if (resolvedEmail == null || resolvedEmail.trim().isEmpty() || resolvedEmail.contains("@skillportal.com")) {
             resolvedEmail = getDefaultStudentEmail();
@@ -172,23 +219,11 @@ public class EmailServiceImpl implements EmailService {
 
             if (isSmtpConfigured()) {
                 try {
-                    JavaMailSender sender = getEffectiveMailSender();
-                    MimeMessage mimeMessage = sender.createMimeMessage();
-                    MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
-                    helper.setFrom(mailUsername.trim(), "SkillX Academy Attendance");
-                    helper.setTo(targetEmail);
-                    helper.setSubject(subject);
-                    helper.setText(plainText, htmlContent);
-
-                    sender.send(mimeMessage);
-                    sentViaSmtp = true;
+                    sentViaSmtp = sendViaSmtpWithFallback(targetEmail, subject, plainText, htmlContent);
                     log.info("Real-time attendance email successfully dispatched via SMTP to {}", targetEmail);
                 } catch (Exception ex) {
                     errorMessage = ex.getMessage();
-                    if (ex.getCause() != null && ex.getCause().getMessage() != null) {
-                        errorMessage += " (Cause: " + ex.getCause().getMessage() + ")";
-                    }
-                    log.error("SMTP email delivery failed for recipient {}: {}", targetEmail, errorMessage, ex);
+                    log.error("SMTP email delivery failed for recipient {}: {}", targetEmail, errorMessage);
                 }
             } else {
                 log.info("[SIMULATED EMAIL] Recipient: {} | Student: {} ({}) | Session: {} | Note: SMTP password not configured yet.",
@@ -212,7 +247,7 @@ public class EmailServiceImpl implements EmailService {
 
         EmailDto.EmailDiagnosticDto dto = new EmailDto.EmailDiagnosticDto();
         dto.setSmtpHost(mailHost != null && !mailHost.trim().isEmpty() ? mailHost : "smtp.gmail.com");
-        dto.setSmtpPort(mailPort > 0 ? mailPort : 587);
+        dto.setSmtpPort(mailPort > 0 ? mailPort : 465);
         dto.setSenderEmail(mailUsername != null && !mailUsername.trim().isEmpty() ? mailUsername.trim() : "diggaviprajwal55@gmail.com");
         dto.setDefaultStudentEmail(getDefaultStudentEmail());
 
@@ -224,12 +259,12 @@ public class EmailServiceImpl implements EmailService {
 
         if (!ready) {
             if (mailUsername == null || mailUsername.trim().isEmpty()) {
-                dto.setStatusMessage("SPRING_MAIL_USERNAME is not set. Enter your Gmail in settings.");
+                dto.setStatusMessage("Sender email is not set. Enter your Gmail in settings.");
             } else if (!hasPass) {
                 dto.setStatusMessage("Google App Password not configured yet. Paste your 16-character code below and click 'Save & Connect'.");
             }
         } else {
-            dto.setStatusMessage("SMTP is connected and active with sender " + mailUsername.trim());
+            dto.setStatusMessage("SMTP is connected and active with sender " + mailUsername.trim() + " (Port " + mailPort + ")");
         }
 
         try {
@@ -277,33 +312,24 @@ public class EmailServiceImpl implements EmailService {
             return result;
         }
 
+        String subject = "🧪 Test Verification: SkillX Attendance Real-Time Email System";
+        String html = "<!DOCTYPE html><html><body style='font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif;background:#0f172a;padding:24px;color:#f8fafc;'>" +
+                "<div style='max-width:520px;margin:auto;background:#1e293b;border-radius:16px;padding:32px;border:1px solid #334155;'>" +
+                "<h2 style='color:#38bdf8;margin-top:0;'>🧪 SMTP Connection Verified!</h2>" +
+                "<p style='color:#cbd5e1;font-size:14px;line-height:1.6;'>This test email confirms that your <strong>SkillX Real-Time Attendance System</strong> is successfully connected to Gmail SMTP and delivering emails.</p>" +
+                "<div style='background:#0f172a;border-radius:10px;padding:16px;margin:20px 0;font-size:13px;border:1px solid #334155;'>" +
+                "<div><strong style='color:#94a3b8;'>Sender Account:</strong> <span style='color:#38bdf8;font-family:monospace;'>" + mailUsername.trim() + "</span></div>" +
+                "<div style='margin-top:8px;'><strong style='color:#94a3b8;'>Delivered To:</strong> <span style='color:#34d399;font-family:monospace;'>" + target + "</span></div>" +
+                "<div style='margin-top:8px;'><strong style='color:#94a3b8;'>Host:</strong> <span style='color:#cbd5e1;font-family:monospace;'>" + mailHost + " (Port " + mailPort + ")</span></div>" +
+                "<div style='margin-top:8px;'><strong style='color:#94a3b8;'>Timestamp:</strong> <span style='color:#cbd5e1;font-family:monospace;'>" + Instant.now() + "</span></div>" +
+                "</div>" +
+                "<p style='color:#34d399;font-weight:700;font-size:14px;margin-bottom:0;'>✓ Live Attendance QR scans will now deliver real-time notices to registered students!</p>" +
+                "</div></body></html>";
+
+        String plainText = "SMTP Test Verification Success!\n\nSender: " + mailUsername.trim() + "\nRecipient: " + target + "\nHost: " + mailHost + "\nTime: " + Instant.now();
+
         try {
-            JavaMailSender sender = getEffectiveMailSender();
-            MimeMessage mimeMessage = sender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
-            helper.setFrom(mailUsername.trim(), "SkillX Academy");
-            helper.setTo(target);
-            helper.setSubject("🧪 Test Verification: SkillX Attendance Real-Time Email System");
-
-            String html = "<!DOCTYPE html><html><body style='font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif;background:#0f172a;padding:24px;color:#f8fafc;'>" +
-                    "<div style='max-width:520px;margin:auto;background:#1e293b;border-radius:16px;padding:32px;border:1px solid #334155;'>" +
-                    "<h2 style='color:#38bdf8;margin-top:0;'>🧪 SMTP Connection Verified!</h2>" +
-                    "<p style='color:#cbd5e1;font-size:14px;line-height:1.6;'>This test email confirms that your <strong>SkillX Real-Time Attendance System</strong> is successfully connected to Gmail SMTP and delivering emails.</p>" +
-                    "<div style='background:#0f172a;border-radius:10px;padding:16px;margin:20px 0;font-size:13px;border:1px solid #334155;'>" +
-                    "<div><strong style='color:#94a3b8;'>Sender Account:</strong> <span style='color:#38bdf8;font-family:monospace;'>" + mailUsername.trim() + "</span></div>" +
-                    "<div style='margin-top:8px;'><strong style='color:#94a3b8;'>Delivered To:</strong> <span style='color:#34d399;font-family:monospace;'>" + target + "</span></div>" +
-                    "<div style='margin-top:8px;'><strong style='color:#94a3b8;'>Host & Port:</strong> <span style='color:#cbd5e1;font-family:monospace;'>" + mailHost + ":" + mailPort + "</span></div>" +
-                    "<div style='margin-top:8px;'><strong style='color:#94a3b8;'>Timestamp:</strong> <span style='color:#cbd5e1;font-family:monospace;'>" + Instant.now() + "</span></div>" +
-                    "</div>" +
-                    "<p style='color:#34d399;font-weight:700;font-size:14px;margin-bottom:0;'>✓ Live Attendance QR scans will now deliver real-time notices to registered students!</p>" +
-                    "</div></body></html>";
-
-            helper.setText(
-                    "SMTP Test Verification Success!\n\nSender: " + mailUsername.trim() + "\nRecipient: " + target + "\nHost: " + mailHost + ":" + mailPort + "\nTime: " + Instant.now(),
-                    html
-            );
-
-            sender.send(mimeMessage);
+            sendViaSmtpWithFallback(target, subject, plainText, html);
             result.setSuccess(true);
             result.setMessage("Test email successfully delivered to " + target + "! Check your inbox (or Spam/Promotions folder).");
 
@@ -315,10 +341,7 @@ public class EmailServiceImpl implements EmailService {
             return result;
         } catch (Exception ex) {
             String errorMsg = ex.getMessage();
-            if (ex.getCause() != null && ex.getCause().getMessage() != null) {
-                errorMsg += " -> " + ex.getCause().getMessage();
-            }
-            log.error("Failed to dispatch test email to {}: {}", target, errorMsg, ex);
+            log.error("Failed to dispatch test email to {}: {}", target, errorMsg);
 
             result.setSuccess(false);
             result.setMessage("SMTP Delivery Failed: " + errorMsg);
@@ -335,8 +358,8 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public EmailDto.EmailTestResult saveSmtpSettings(EmailDto.SaveSettingsRequest request) {
+        EmailDto.EmailTestResult res = new EmailDto.EmailTestResult();
         if (request == null) {
-            EmailDto.EmailTestResult res = new EmailDto.EmailTestResult();
             res.setSuccess(false);
             res.setMessage("Request data is missing");
             return res;
@@ -350,31 +373,33 @@ public class EmailServiceImpl implements EmailService {
             if (request.getSmtpPort() != null && request.getSmtpPort() > 0) {
                 this.mailPort = request.getSmtpPort();
                 jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('smtp_port', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", String.valueOf(mailPort));
+            } else {
+                this.mailPort = 465;
             }
             if (request.getSmtpUsername() != null && !request.getSmtpUsername().trim().isEmpty()) {
                 this.mailUsername = request.getSmtpUsername().trim();
                 jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('smtp_username', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", mailUsername);
             }
             if (request.getSmtpPassword() != null && !request.getSmtpPassword().trim().isEmpty()) {
-                this.mailPassword = request.getSmtpPassword().trim();
+                this.mailPassword = request.getSmtpPassword().replaceAll("\\s+", "").trim();
                 jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('smtp_password', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", mailPassword);
             }
             if (request.getDefaultStudentEmail() != null && !request.getDefaultStudentEmail().trim().isEmpty()) {
                 String defEmail = request.getDefaultStudentEmail().trim();
                 jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('default_student_email', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", defEmail);
-                jdbcTemplate.update("UPDATE users SET email = ? WHERE email LIKE '%@skillportal.com'", defEmail);
             }
 
-            // Invalidate cached sender to use new credentials
             this.mailSender = null;
 
-            // Immediately test dispatch to verify credentials
-            return sendTestEmail(request.getDefaultStudentEmail());
+            String target = (request.getDefaultStudentEmail() != null && !request.getDefaultStudentEmail().trim().isEmpty())
+                    ? request.getDefaultStudentEmail().trim()
+                    : (mailUsername != null ? mailUsername.trim() : "diggaviprajwal55@gmail.com");
+
+            return sendTestEmail(target);
         } catch (Exception e) {
             log.error("Failed to save SMTP settings: {}", e.getMessage(), e);
-            EmailDto.EmailTestResult res = new EmailDto.EmailTestResult();
             res.setSuccess(false);
-            res.setMessage("Failed to save settings: " + e.getMessage());
+            res.setMessage("Settings saved, but test delivery failed: " + e.getMessage());
             return res;
         }
     }
@@ -386,11 +411,8 @@ public class EmailServiceImpl implements EmailService {
         }
         String cleanEmail = newEmail.trim();
         try {
-            // Update users table by students.id
             jdbcTemplate.update("UPDATE users u JOIN students s ON s.user_id = u.id SET u.email = ? WHERE s.id = ?", cleanEmail, studentId);
-            // Update users table directly by users.id
             jdbcTemplate.update("UPDATE users SET email = ? WHERE id = ?", cleanEmail, studentId);
-            // Also store as default fallback
             jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('default_student_email', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", cleanEmail);
             return true;
         } catch (Exception e) {
