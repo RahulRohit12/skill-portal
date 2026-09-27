@@ -936,6 +936,7 @@ export interface AnnouncementCreateRequest {
   title: string;
   message: string;
   type?: string;
+  target?: 'ALL' | 'BATCH' | 'GENERAL';
   targetBatchId?: number;
   linkUrl?: string;
 }

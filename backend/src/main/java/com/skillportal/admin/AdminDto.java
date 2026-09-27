@@ -1464,6 +1464,7 @@ public class AdminDto {
         private String title;
         private String message;
         private String type = "ANNOUNCEMENT";
+        private String target = "ALL"; // "ALL", "BATCH", "GENERAL"
         private Long targetBatchId;
         private String linkUrl;
 
@@ -1475,6 +1476,9 @@ public class AdminDto {
 
         public String getType() { return type; }
         public void setType(String type) { this.type = type; }
+
+        public String getTarget() { return target; }
+        public void setTarget(String target) { this.target = target; }
 
         public Long getTargetBatchId() { return targetBatchId; }
         public void setTargetBatchId(Long targetBatchId) { this.targetBatchId = targetBatchId; }

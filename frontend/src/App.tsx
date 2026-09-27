@@ -24,6 +24,7 @@ const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then(
 const AdminScannerPage = lazy(() => import('./pages/AdminScannerPage').then(m => ({ default: m.AdminScannerPage })));
 const CompanyQuestionsPage = lazy(() => import('./pages/CompanyQuestionsPage').then(m => ({ default: m.CompanyQuestionsPage })));
 const JobsPage = lazy(() => import('./pages/JobsPage').then(m => ({ default: m.JobsPage })));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then(m => ({ default: m.NotificationsPage })));
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean }> = ({
   children,
@@ -80,6 +81,7 @@ export const App: React.FC = () => {
                 <Route path="materials" element={<MaterialsPage />} />
                 <Route path="bookmarks" element={<BookmarksPage />} />
                 <Route path="profile" element={<ProfilePage />} />
+                <Route path="notifications" element={<NotificationsPage />} />
 
                 {/* Admin Portal */}
                 <Route

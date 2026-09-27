@@ -24,7 +24,8 @@ public class NotificationRepository {
             item.setType(rs.getString("type"));
             item.setLinkUrl(rs.getString("link_url"));
             item.setRead(rs.getBoolean("is_read"));
-            item.setCreatedAt(rs.getTimestamp("created_at").toInstant().toString());
+            java.sql.Timestamp ts = rs.getTimestamp("created_at");
+            item.setCreatedAt(ts != null ? ts.toInstant().toString() : java.time.Instant.now().toString());
             return item;
         }, userId);
     }

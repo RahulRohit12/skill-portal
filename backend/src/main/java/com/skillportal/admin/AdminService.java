@@ -332,13 +332,13 @@ public class AdminService {
     // ANNOUNCEMENTS
     // ==========================================
     @Transactional
-    public void createAnnouncement(AdminDto.AnnouncementCreateRequest req) {
+    public int createAnnouncement(AdminDto.AnnouncementCreateRequest req) {
         if (req.getTitle() == null || req.getTitle().isBlank()) {
             throw new BadRequestException("Announcement title is required");
         }
         if (req.getMessage() == null || req.getMessage().isBlank()) {
             throw new BadRequestException("Announcement message is required");
         }
-        adminRepository.createAnnouncement(req);
+        return adminRepository.createAnnouncement(req);
     }
 }

@@ -362,8 +362,8 @@ public class AdminController {
     // ==========================================
     @PostMapping("/announcements")
     @Operation(summary = "Create system or batch broadcast announcement")
-    public ResponseEntity<ApiResponse<Void>> createAnnouncement(@RequestBody AdminDto.AnnouncementCreateRequest req) {
-        adminService.createAnnouncement(req);
-        return ResponseEntity.ok(ApiResponse.success("Announcement broadcasted successfully", null));
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> createAnnouncement(@RequestBody AdminDto.AnnouncementCreateRequest req) {
+        int count = adminService.createAnnouncement(req);
+        return ResponseEntity.ok(ApiResponse.success("Announcement broadcasted successfully to " + count + " recipient(s)", java.util.Map.of("recipientCount", count)));
     }
 }

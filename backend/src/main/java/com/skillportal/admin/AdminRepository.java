@@ -1202,25 +1202,37 @@ public class AdminRepository {
     // ==========================================
     // 10. ANNOUNCEMENTS
     // ==========================================
-    public void createAnnouncement(AdminDto.AnnouncementCreateRequest req) {
-        if (req.getTargetBatchId() != null) {
-            List<Long> userIds = jdbcTemplate.query(
-                    "SELECT user_id FROM students WHERE batch_id = ?",
-                    (rs, rowNum) -> rs.getLong("user_id"),
-                    req.getTargetBatchId());
-            for (Long uId : userIds) {
-                jdbcTemplate.update("INSERT INTO notifications (user_id, title, message, type, link_url) VALUES (?, ?, ?, ?, ?)",
-                        uId, req.getTitle(), req.getMessage(), req.getType(), req.getLinkUrl());
+    public int createAnnouncement(AdminDto.AnnouncementCreateRequest req) {
+        List<Long> userIds;
+        String target = req.getTarget() != null ? req.getTarget().trim().toUpperCase() : "";
+
+        if ("BATCH".equals(target) || (target.isEmpty() && req.getTargetBatchId() != null)) {
+            if (req.getTargetBatchId() != null) {
+                userIds = jdbcTemplate.query(
+                        "SELECT user_id FROM students WHERE batch_id = ?",
+                        (rs, rowNum) -> rs.getLong("user_id"),
+                        req.getTargetBatchId());
+            } else {
+                userIds = List.of();
             }
+        } else if ("GENERAL".equals(target)) {
+            // General announcement targeted to all enrolled students
+            userIds = jdbcTemplate.query(
+                    "SELECT user_id FROM students",
+                    (rs, rowNum) -> rs.getLong("user_id"));
         } else {
-            List<Long> userIds = jdbcTemplate.query(
-                    "SELECT id FROM users",
+            // ALL: Entire platform active users
+            userIds = jdbcTemplate.query(
+                    "SELECT id FROM users WHERE is_active = TRUE",
                     (rs, rowNum) -> rs.getLong("id"));
-            for (Long uId : userIds) {
-                jdbcTemplate.update("INSERT INTO notifications (user_id, title, message, type, link_url) VALUES (?, ?, ?, ?, ?)",
-                        uId, req.getTitle(), req.getMessage(), req.getType(), req.getLinkUrl());
-            }
         }
+
+        String notifType = (req.getType() != null && !req.getType().isBlank()) ? req.getType().trim().toUpperCase() : "ANNOUNCEMENT";
+        for (Long uId : userIds) {
+            jdbcTemplate.update("INSERT INTO notifications (user_id, title, message, type, link_url, is_read) VALUES (?, ?, ?, ?, ?, FALSE)",
+                    uId, req.getTitle(), req.getMessage(), notifType, req.getLinkUrl());
+        }
+        return userIds.size();
     }
 
     private Timestamp parseTimestamp(String input, String defaultTime) {

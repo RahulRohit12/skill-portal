@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -26,9 +26,11 @@ import {
   GraduationCap,
   X
 } from 'lucide-react';
+import api from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { StudentQrModal } from '../attendance/StudentQrModal';
+import { StudentNotificationCenter } from '../notification/StudentNotificationCenter';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -41,7 +43,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
   const navigate = useNavigate();
   const [showQrModal, setShowQrModal] = useState(false);
   const [showReadinessModal, setShowReadinessModal] = useState(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isHovered, setIsHovered] = useState(false);
+
+  const fetchUnreadCount = () => {
+    api.get('/notifications')
+      .then((res) => {
+        if (res.data?.data?.unreadCount != null) {
+          setUnreadCount(res.data.data.unreadCount);
+        } else if (Array.isArray(res.data?.data)) {
+          const count = res.data.data.filter((n: any) => !n.read && !n.isRead).length;
+          setUnreadCount(count);
+        } else if (res.data?.data?.notifications) {
+          const count = res.data.data.notifications.filter((n: any) => !n.read && !n.isRead).length;
+          setUnreadCount(count);
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+    const timer = setInterval(fetchUnreadCount, 30000);
+    const onRefresh = () => fetchUnreadCount();
+    window.addEventListener('refresh-notifications', onRefresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('refresh-notifications', onRefresh);
+    };
+  }, []);
 
   // Student Initials
   const initials = user?.fullName
@@ -129,16 +160,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
         {/* Top Header & Navigation */}
         <div className="flex-1 flex flex-col min-h-0 overflow-y-auto no-scrollbar">
           {/* Brand Logo & Notification Header */}
-          <div className="pt-4 px-3.5 pb-3 flex items-center justify-between">
+          <div className="pt-4 px-3.5 pb-2 flex items-center justify-between">
             <NavLink to="/" className="flex items-center gap-3 group overflow-hidden">
               <div className="relative shrink-0">
                 <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#0077b6] via-[#0096c7] to-[#00c2ff] flex items-center justify-center text-white shadow-md shadow-cyan-500/30 border border-cyan-300/30">
                   <GraduationCap className="w-5 h-5 text-white" />
                 </div>
-                {/* Notification Badge 77 */}
-                <span className="absolute -top-1 -right-1.5 px-1.5 py-0.2 min-w-[18px] h-4.5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[#0c0e12]">
-                  77
-                </span>
+                {/* Dynamic Notification Badge on Logo */}
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1.5 px-1.5 py-0.2 min-w-[18px] h-4.5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[#0c0e12] animate-pulse shadow-md shadow-rose-950/60">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </div>
 
               {isHovered && (
@@ -160,15 +193,38 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
             {isHovered && (
               <div className="relative animate-in fade-in duration-200">
                 <button
-                  onClick={() => navigate('/notifications')}
-                  className="p-2 text-slate-400 hover:text-white hover:bg-[#141722] rounded-xl transition-colors relative"
-                  title="Notifications"
+                  onClick={() => setShowNotificationsModal(true)}
+                  className="p-2 text-slate-300 hover:text-white hover:bg-[#141722] rounded-xl transition-colors relative"
+                  title={unreadCount > 0 ? `${unreadCount} unread notification(s)` : 'Notifications'}
                 >
-                  <Bell className="w-4.5 h-4.5" />
+                  <Bell className="w-5 h-5 text-slate-300" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 px-1.5 min-w-[18px] h-4.5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[#0c0e12] shadow-md shadow-rose-950/50 animate-pulse">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
                 </button>
               </div>
             )}
           </div>
+
+          {/* Dedicated Collapsed Mode Notification Bell Button */}
+          {!isHovered && (
+            <div className="flex justify-center pb-2">
+              <button
+                onClick={() => setShowNotificationsModal(true)}
+                className="w-12 h-12 rounded-xl bg-[#141722] hover:bg-[#1c2232] border border-[#1e2535] hover:border-cyan-500/40 flex items-center justify-center text-slate-300 hover:text-white transition-all relative group shadow-sm"
+                title={unreadCount > 0 ? `${unreadCount} unread notification(s)` : 'Notifications'}
+              >
+                <Bell className="w-5 h-5 text-slate-300 group-hover:text-cyan-400 transition-colors" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 px-1.5 min-w-[18px] h-4.5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[#0c0e12] shadow-md shadow-rose-950/50 animate-pulse">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
 
           {/* Quick Search Bar */}
           <div className="px-3 pb-2">
@@ -417,6 +473,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
 
       {/* Official Student QR Identity Modal */}
       <StudentQrModal isOpen={showQrModal} onClose={() => setShowQrModal(false)} />
+
+      {/* Student Notification Center Drawer */}
+      <StudentNotificationCenter
+        isOpen={showNotificationsModal}
+        onClose={() => {
+          setShowNotificationsModal(false);
+          fetchUnreadCount();
+        }}
+        onRefreshUnreadCount={fetchUnreadCount}
+      />
 
       {/* Placement Readiness Score Breakdown Modal */}
       {showReadinessModal && (
