@@ -132,8 +132,9 @@ export const AdminDashboardPage: React.FC = () => {
             <ShieldCheck className="w-4 h-4 text-[#00c2ff]" />
             <span>Master Enterprise Administrator Console</span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-            Skill Portal Multi-Module Administration
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-1.5">
+            <span>SKILL<span className="text-[#00c2ff]">X</span> ACADEMY</span>
+            <span className="text-slate-400 font-semibold text-lg sm:text-xl">Multi-Module Administration</span>
           </h1>
           <p className="text-xs text-slate-400 mt-0.5">
             Full-lifecycle management for students, cohorts, curriculum hierarchy, question bank, assignments, assessments, and attendance.

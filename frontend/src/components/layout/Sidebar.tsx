@@ -23,6 +23,7 @@ import {
   TrendingUp,
   Award,
   Target,
+  GraduationCap,
   X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -110,8 +111,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
           <div className="pt-4 px-3.5 pb-3 flex items-center justify-between">
             <NavLink to="/" className="flex items-center gap-2.5 group overflow-hidden">
               <div className="relative shrink-0">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#00b4d8] to-[#38bdf8] flex items-center justify-center text-slate-950 font-black text-sm shadow-md shadow-cyan-500/20">
-                  ⚡
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#0077b6] via-[#0096c7] to-[#00c2ff] flex items-center justify-center text-white shadow-md shadow-cyan-500/25">
+                  <GraduationCap className="w-4 h-4 text-white" />
                 </div>
                 {/* Notification Badge 77 as in user's image */}
                 <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 min-w-[16px] h-4 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-[#0c0e12]">
@@ -121,11 +122,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
 
               {isHovered && (
                 <div className="flex flex-col overflow-hidden animate-in fade-in duration-200">
-                  <span className="font-black text-base tracking-tight text-[#00c2ff] leading-none whitespace-nowrap">
-                    SkillX Academy
+                  <span className="font-black text-sm tracking-tight text-white leading-none whitespace-nowrap">
+                    SKILL<span className="text-[#00c2ff]">X</span> ACADEMY
                   </span>
                   <span className="text-[9px] text-slate-400 tracking-wider font-semibold uppercase mt-0.5 whitespace-nowrap">
-                    Skill Portal
+                    Engineering Portal
                   </span>
                 </div>
               )}

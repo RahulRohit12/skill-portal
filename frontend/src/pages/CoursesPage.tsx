@@ -30,7 +30,8 @@ import {
   MessageSquare,
   Send,
   FileText,
-  Volume2
+  Volume2,
+  GraduationCap
 } from 'lucide-react';
 import api from '../api/client';
 import { CourseSummary, LiveClassItem } from '../types';
@@ -1238,8 +1239,9 @@ ORDER BY created_at DESC;`}
       <div className="bg-[#0c0e12] border border-[#191c24] rounded-2xl p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
         <div className="space-y-2 relative z-10">
           <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-[#00c2ff]/15 border border-[#00c2ff]/30 text-[#00c2ff] text-xs font-bold">
-              TAP Academy &bull; Skillex Curriculum
+            <span className="px-2.5 py-0.5 rounded-full bg-[#00c2ff]/15 border border-[#00c2ff]/30 text-[#00c2ff] text-xs font-bold flex items-center gap-1.5">
+              <GraduationCap className="w-3.5 h-3.5" />
+              <span>SKILL<span className="text-white">X</span> ACADEMY &bull; Premier Curriculum</span>
             </span>
             <span className="px-2.5 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 text-xs font-bold">
               2026 Batch Ready
@@ -1297,9 +1299,10 @@ ORDER BY created_at DESC;`}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0c0e12] via-transparent to-black/30" />
 
-                {/* Tap Academy Top Tag */}
-                <div className="absolute top-3 left-3 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-sm border border-white/10 text-[10px] font-bold text-white flex items-center gap-1">
-                  <span>TAP ACADEMY</span>
+                {/* SkillX Academy Top Tag */}
+                <div className="absolute top-3 left-3 px-2 py-0.5 rounded-md bg-black/65 backdrop-blur-sm border border-white/10 text-[10px] font-bold text-white flex items-center gap-1">
+                  <GraduationCap className="w-3 h-3 text-[#00c2ff]" />
+                  <span>SKILL<span className="text-[#00c2ff]">X</span> ACADEMY</span>
                 </div>
               </div>
 

@@ -12,7 +12,8 @@ import {
   CheckCheck,
   ShieldCheck,
   BookOpen,
-  Award
+  Award,
+  GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -89,15 +90,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
           </button>
 
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-600 to-sky-500 flex items-center justify-center text-white shadow-md shadow-cyan-500/20">
-              <Award className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#0077b6] via-[#0096c7] to-[#00c2ff] flex items-center justify-center text-white shadow-md shadow-cyan-500/25">
+              <GraduationCap className="w-5 h-5 text-white" />
             </div>
             <div className="flex flex-col">
-              <span className="font-extrabold text-base tracking-tight bg-gradient-to-r from-cyan-400 to-sky-300 bg-clip-text text-transparent">
-                SKILL PORTAL
+              <span className="font-extrabold text-base tracking-tight text-white flex items-center">
+                SKILL<span className="text-[#00c2ff]">X</span> ACADEMY
               </span>
-              <span className="text-[10px] text-slate-400 -mt-1 tracking-wider uppercase font-semibold">
-                LMS & Coding Platform
+              <span className="text-[10px] text-slate-400 -mt-0.5 tracking-wider uppercase font-semibold">
+                Learning Today, Leading Tomorrow
               </span>
             </div>
           </Link>

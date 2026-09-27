@@ -19,7 +19,7 @@ export const AnnouncementMarquee: React.FC = () => {
         setAnnouncements([
           {
             id: 1,
-            title: 'Welcome to SKILL PORTAL',
+            title: 'Welcome to SkillX Academy',
             message: 'Mid-term assessments are scheduled. Practice coding in the Lab and maintain your daily streak!',
             type: 'ANNOUNCEMENT',
             linkUrl: '/tests',

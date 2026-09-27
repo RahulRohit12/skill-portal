@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from '../common/ErrorBoundary';
-import { MessageSquare, X, Send, Bot, Sparkles, Menu } from 'lucide-react';
+import { MessageSquare, X, Send, Bot, Sparkles, Menu, GraduationCap } from 'lucide-react';
 
 export const AppShell: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -41,9 +41,14 @@ export const AppShell: React.FC = () => {
         >
           <Menu className="w-5 h-5" />
         </button>
-        <span className="font-black text-sm tracking-tight text-[#00c2ff]">
-          SkillX Academy
-        </span>
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#0077b6] via-[#0096c7] to-[#00c2ff] flex items-center justify-center text-white shadow-sm">
+            <GraduationCap className="w-4 h-4 text-white" />
+          </div>
+          <span className="font-black text-sm tracking-tight text-white flex items-center">
+            SKILL<span className="text-[#00c2ff]">X</span> ACADEMY
+          </span>
+        </div>
         <div className="w-6" />
       </div>
 
