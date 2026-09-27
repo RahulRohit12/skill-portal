@@ -77,6 +77,28 @@ export const CoursesPage: React.FC = () => {
   // Certificate Modal State
   const [certificateCourse, setCertificateCourse] = useState<string | null>(null);
 
+  // Live Class State & Polling
+  const [activeLiveClass, setActiveLiveClass] = useState<LiveClassItem | null>(null);
+
+  const fetchLiveClass = async () => {
+    try {
+      const res = await api.get('/live-classes/active');
+      if (res.data?.data) {
+        setActiveLiveClass(res.data.data);
+      } else {
+        setActiveLiveClass(null);
+      }
+    } catch (e) {
+      setActiveLiveClass(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchLiveClass();
+    const interval = setInterval(fetchLiveClass, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Watched lessons tracking
   const [watchedLessons, setWatchedLessons] = useState<Record<number, boolean>>(() => {
     try {
@@ -762,6 +784,104 @@ export const CoursesPage: React.FC = () => {
   // ==================== RENDER VIEW: 3-COLUMN COURSE CARDS (IMAGE 3) ====================
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-20">
+      {/* Live Class Section: Dynamic based on active live session */}
+      {activeLiveClass ? (
+        <div className="rounded-2xl bg-gradient-to-r from-rose-950/40 via-[#131620] to-[#131620] border-2 border-rose-500/50 p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden shadow-2xl shadow-rose-950/30">
+          <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-rose-600/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+
+          <div className="space-y-3 z-10 max-w-3xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-rose-500/25 border border-rose-500/50 text-rose-300 text-xs font-black tracking-wider uppercase">
+                Live Now
+              </span>
+              {activeLiveClass.batchName && (
+                <span className="px-2.5 py-0.5 rounded-full bg-sky-500/20 border border-sky-500/40 text-sky-300 text-xs font-bold">
+                  Batch: {activeLiveClass.batchName}
+                </span>
+              )}
+              {activeLiveClass.courseTitle && (
+                <span className="hidden sm:inline px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs font-medium border border-slate-700">
+                  {activeLiveClass.courseTitle}
+                </span>
+              )}
+            </div>
+
+            <div>
+              <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight">
+                {activeLiveClass.title}
+              </h2>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-300 mt-1">
+                <span className="flex items-center gap-1.5 font-semibold text-slate-200">
+                  <User className="w-3.5 h-3.5 text-sky-400" />
+                  Instructor: {activeLiveClass.instructorName}
+                </span>
+                {activeLiveClass.startedAt && (
+                  <span className="flex items-center gap-1.5 text-slate-400">
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    Started:{' '}
+                    {new Date(activeLiveClass.startedAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {activeLiveClass.description && (
+              <p className="text-xs text-slate-400 leading-relaxed">
+                {activeLiveClass.description}
+              </p>
+            )}
+          </div>
+
+          {/* Join Live CTA Button */}
+          <div className="z-10 shrink-0">
+            <a
+              href={activeLiveClass.meetingLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-rose-600 via-rose-500 to-red-500 hover:from-rose-500 hover:to-red-400 text-white font-black text-sm tracking-wide transition-all shadow-xl shadow-rose-900/50 hover:scale-[1.03] active:scale-95 group"
+            >
+              <Radio className="w-4 h-4 animate-pulse text-white" />
+              <span>Join Live Class</span>
+              <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </a>
+          </div>
+        </div>
+      ) : (
+        /* Top Banner: No live classes currently scheduled */
+        <div className="rounded-2xl bg-[#0c0e12] border border-[#191c24] p-6 flex flex-col sm:flex-row items-center justify-between gap-6 relative overflow-hidden shadow-xl">
+          <div className="space-y-2 z-10">
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-slate-500" />
+              <h2 className="text-base sm:text-lg font-black text-white">
+                No live class currently scheduled
+              </h2>
+            </div>
+            <p className="text-xs text-slate-400 max-w-lg leading-relaxed">
+              There are currently no active live sessions for your batch. Check back when your instructor starts a class or browse your on-demand masterclasses below.
+            </p>
+            <button
+              onClick={() => alert('Class Schedule: Mon-Fri 10:00 AM - 1:00 PM & 3:00 PM - 6:00 PM')}
+              className="mt-2 px-4 py-2 bg-[#161a24] hover:bg-[#1e2332] text-slate-200 border border-[#232938] rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+            >
+              View Schedule
+            </button>
+          </div>
+
+          <div className="w-44 h-28 hidden sm:flex items-center justify-center relative shrink-0">
+            <div className="w-36 h-24 rounded-xl bg-gradient-to-tr from-sky-500/15 to-blue-500/10 border border-sky-500/30 flex items-center justify-center text-3xl">
+              💻
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Banner / Header */}
       <div className="bg-[#0c0e12] border border-[#191c24] rounded-2xl p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
         <div className="space-y-2 relative z-10">
