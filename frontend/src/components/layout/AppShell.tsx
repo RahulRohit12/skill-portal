@@ -56,7 +56,7 @@ export const AppShell: React.FC = () => {
       <Sidebar isOpen={sidebarOpen} onCloseMobile={() => setSidebarOpen(false)} />
 
       {/* Main Workspace Frame */}
-      <div className="flex-1 lg:pl-[72px] min-w-0 flex flex-col min-h-screen pt-14 lg:pt-0">
+      <div className="flex-1 lg:pl-[84px] min-w-0 flex flex-col min-h-screen pt-14 lg:pt-0">
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
           <ErrorBoundary>
             <Outlet />

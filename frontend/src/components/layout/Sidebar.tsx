@@ -48,32 +48,53 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
     ? user.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
     : 'PD';
 
-  const navItems = [
-    { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/courses', label: 'Courses', icon: BookOpen },
-    { to: '/tests', label: 'Tests', icon: FileCheck2 },
-    { to: '/assignments', label: 'Assignments', icon: FileText },
-    { to: '/company-questions', label: 'Company Questions', icon: Building2 },
-    { to: '/jobs', label: 'Jobs', icon: Briefcase },
-    { to: '/attendance', label: 'Attendance', icon: QrCode },
-    { to: '/bookmarks', label: 'Bookmarks', icon: Bookmark },
-    { to: '/coding', label: 'Ask TAI', icon: Bot },
-    { to: '/profile', label: 'Profile', icon: User },
+  interface NavItem {
+    to: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }
+
+  interface NavSection {
+    title: string;
+    items: NavItem[];
+  }
+
+  const navSections: NavSection[] = [
+    {
+      title: 'LEARNING',
+      items: [
+        { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+        { to: '/courses', label: 'Courses', icon: BookOpen },
+        { to: '/assignments', label: 'Assignments', icon: FileText },
+        { to: '/tests', label: 'Tests', icon: FileCheck2 },
+      ]
+    },
+    {
+      title: 'CAREER & PLACEMENT',
+      items: [
+        { to: '/company-questions', label: 'Company Questions', icon: Building2 },
+        { to: '/jobs', label: 'Jobs & Drives', icon: Briefcase },
+        { to: '/attendance', label: 'Attendance', icon: QrCode },
+      ]
+    },
+    {
+      title: 'TOOLS & PROFILE',
+      items: [
+        { to: '/bookmarks', label: 'Bookmarks', icon: Bookmark },
+        { to: '/coding', label: 'Ask TAI', icon: Bot },
+        { to: '/profile', label: 'Profile', icon: User },
+      ]
+    }
   ];
 
   if (user?.role === 'ROLE_ADMIN') {
-    navItems.push(
-      {
-        to: '/admin',
-        label: 'Admin Console',
-        icon: ShieldCheck,
-      },
-      {
-        to: '/admin/scanner',
-        label: 'QR Scanner',
-        icon: ScanLine,
-      }
-    );
+    navSections.push({
+      title: 'ADMINISTRATION',
+      items: [
+        { to: '/admin', label: 'Admin Console', icon: ShieldCheck },
+        { to: '/admin/scanner', label: 'QR Scanner', icon: ScanLine },
+      ]
+    });
   }
 
   const handleLogout = async () => {
@@ -95,37 +116,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
         />
       )}
 
-      {/* Sidebar Container: Collapsed by default (70px) on desktop, expands to 256px on hover */}
+      {/* Sidebar Container: Collapsed (84px) on desktop, expands to 288px (w-72) on hover */}
       <aside
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={`fixed top-0 bottom-0 left-0 z-40 h-screen bg-[#0c0e12] border-r border-[#191c24] transition-all duration-300 ease-in-out flex flex-col justify-between select-none ${
           isOpen
-            ? 'translate-x-0 w-64'
-            : '-translate-x-full lg:translate-x-0 ' + (isHovered ? 'lg:w-64 shadow-2xl shadow-black/80 z-50' : 'lg:w-[70px]')
+            ? 'translate-x-0 w-72'
+            : '-translate-x-full lg:translate-x-0 ' + (isHovered ? 'lg:w-72 shadow-2xl shadow-black/90 z-50' : 'lg:w-[84px]')
         }`}
       >
         {/* Top Header & Navigation */}
         <div className="flex-1 flex flex-col min-h-0 overflow-y-auto no-scrollbar">
           {/* Brand Logo & Notification Header */}
           <div className="pt-4 px-3.5 pb-3 flex items-center justify-between">
-            <NavLink to="/" className="flex items-center gap-2.5 group overflow-hidden">
+            <NavLink to="/" className="flex items-center gap-3 group overflow-hidden">
               <div className="relative shrink-0">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#0077b6] via-[#0096c7] to-[#00c2ff] flex items-center justify-center text-white shadow-md shadow-cyan-500/25">
-                  <GraduationCap className="w-4 h-4 text-white" />
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#0077b6] via-[#0096c7] to-[#00c2ff] flex items-center justify-center text-white shadow-md shadow-cyan-500/30 border border-cyan-300/30">
+                  <GraduationCap className="w-5 h-5 text-white" />
                 </div>
-                {/* Notification Badge 77 as in user's image */}
-                <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 min-w-[16px] h-4 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-[#0c0e12]">
+                {/* Notification Badge 77 */}
+                <span className="absolute -top-1 -right-1.5 px-1.5 py-0.2 min-w-[18px] h-4.5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[#0c0e12]">
                   77
                 </span>
               </div>
 
               {isHovered && (
                 <div className="flex flex-col overflow-hidden animate-in fade-in duration-200">
-                  <span className="font-black text-sm tracking-tight text-white leading-none whitespace-nowrap">
-                    SKILL<span className="text-[#00c2ff]">X</span> ACADEMY
+                  <span className="font-black text-base sm:text-lg tracking-tight text-white leading-none whitespace-nowrap flex items-center">
+                    <span>SKILL</span>
+                    <span className="text-[#00c2ff] mx-0.5">X</span>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-cyan-300 to-blue-400">
+                      ACADEMY
+                    </span>
                   </span>
-                  <span className="text-[9px] text-slate-400 tracking-wider font-semibold uppercase mt-0.5 whitespace-nowrap">
+                  <span className="text-[11px] text-cyan-400 tracking-wider font-extrabold uppercase mt-1 whitespace-nowrap">
                     Engineering Portal
                   </span>
                 </div>
@@ -136,156 +161,165 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
               <div className="relative animate-in fade-in duration-200">
                 <button
                   onClick={() => navigate('/notifications')}
-                  className="p-1.5 text-slate-400 hover:text-white transition-colors relative"
+                  className="p-2 text-slate-400 hover:text-white hover:bg-[#141722] rounded-xl transition-colors relative"
                   title="Notifications"
                 >
-                  <Bell className="w-4 h-4" />
+                  <Bell className="w-4.5 h-4.5" />
                 </button>
               </div>
             )}
           </div>
 
           {/* Quick Search Bar */}
-          <div className="px-2.5 pb-2">
+          <div className="px-3 pb-2">
             {isHovered ? (
               <div className="relative flex items-center animate-in fade-in duration-200">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3" />
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5" />
                 <input
                   type="text"
-                  placeholder="Search"
-                  className="w-full bg-[#14171f] border border-[#1e2330] focus:border-[#00b4d8] text-slate-200 text-xs pl-8 pr-3 py-1.5 rounded-lg outline-none transition-all placeholder:text-slate-400"
+                  placeholder="Search portal, courses, topics..."
+                  className="w-full bg-[#141722] border border-[#1e2535] focus:border-[#00c2ff] text-slate-100 text-sm pl-10 pr-3 py-2 rounded-xl outline-none transition-all placeholder:text-slate-400 font-medium"
                 />
               </div>
             ) : (
               <div className="flex justify-center">
                 <button
                   onClick={() => setIsHovered(true)}
-                  className="w-9 h-9 rounded-xl bg-[#14171f] hover:bg-[#1a202c] border border-[#1e2330] flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+                  className="w-12 h-12 rounded-xl bg-[#141722] hover:bg-[#1c2232] border border-[#1e2535] flex items-center justify-center text-slate-400 hover:text-white transition-colors"
                   title="Search"
                 >
-                  <Search className="w-4 h-4" />
+                  <Search className="w-5 h-5" />
                 </button>
               </div>
             )}
           </div>
 
           {/* Quick QR Code / Scanner Action */}
-          <div className="px-2.5 py-1">
+          <div className="px-3 py-1">
             {user?.role === 'ROLE_ADMIN' ? (
               isHovered ? (
                 <NavLink
                   to="/admin/scanner"
                   onClick={onCloseMobile}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[#00c2ff] hover:text-white bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-800/40 rounded-xl transition-all text-left shadow-sm animate-in fade-in duration-200"
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-bold text-[#00c2ff] hover:text-white bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-800/40 rounded-xl transition-all text-left shadow-sm animate-in fade-in duration-200"
                 >
-                  <ScanLine className="w-4 h-4 text-[#00c2ff] shrink-0" />
-                  <span className="font-bold whitespace-nowrap">Admin Scanner</span>
+                  <ScanLine className="w-5 h-5 text-[#00c2ff] shrink-0" />
+                  <span className="whitespace-nowrap font-black">Admin Scanner</span>
                 </NavLink>
               ) : (
                 <div className="flex justify-center">
                   <NavLink
                     to="/admin/scanner"
-                    className="w-9 h-9 rounded-xl bg-cyan-950/40 border border-cyan-800/40 flex items-center justify-center text-[#00c2ff]"
+                    className="w-12 h-12 rounded-xl bg-cyan-950/40 border border-cyan-800/40 flex items-center justify-center text-[#00c2ff] hover:scale-105 transition-transform"
                     title="Admin Scanner"
                   >
-                    <ScanLine className="w-4 h-4" />
+                    <ScanLine className="w-5 h-5" />
                   </NavLink>
                 </div>
               )
             ) : isHovered ? (
               <button
                 onClick={() => setShowQrModal(true)}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-[#14171f] rounded-xl transition-all text-left animate-in fade-in duration-200"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-bold text-slate-200 hover:text-white bg-[#141722] hover:bg-[#1c2232] border border-[#1e2535] rounded-xl transition-all text-left animate-in fade-in duration-200 shadow-sm"
               >
-                <QrCode className="w-4 h-4 text-[#00c2ff] shrink-0" />
-                <span className="whitespace-nowrap">My Attendance QR</span>
+                <QrCode className="w-5 h-5 text-[#00c2ff] shrink-0" />
+                <span className="whitespace-nowrap font-bold">My Attendance QR</span>
               </button>
             ) : (
               <div className="flex justify-center">
                 <button
                   onClick={() => setShowQrModal(true)}
-                  className="w-9 h-9 rounded-xl bg-[#14171f] hover:bg-[#1a202c] border border-[#1e2330] flex items-center justify-center text-[#00c2ff]"
+                  className="w-12 h-12 rounded-xl bg-[#141722] hover:bg-[#1c2232] border border-[#1e2535] flex items-center justify-center text-[#00c2ff] hover:scale-105 transition-transform"
                   title="My Attendance QR"
                 >
-                  <QrCode className="w-4 h-4" />
+                  <QrCode className="w-5 h-5" />
                 </button>
               </div>
             )}
           </div>
 
-          {/* MENU Category Label */}
-          {isHovered && (
-            <div className="px-4 pt-3 pb-1 animate-in fade-in duration-200">
-              <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">
-                MENU
-              </span>
-            </div>
-          )}
+          {/* Grouped Navigation Links */}
+          <nav className="px-3 flex-1 mt-2 space-y-3">
+            {navSections.map((section, sIdx) => (
+              <div key={section.title} className="space-y-1">
+                {/* Section Title when Hovered / Expanded */}
+                {isHovered ? (
+                  <div className="px-3 pt-2 pb-1 text-xs font-black tracking-wider text-slate-400 uppercase select-none animate-in fade-in duration-200">
+                    {section.title}
+                  </div>
+                ) : (
+                  sIdx > 0 && <div className="w-8 h-px bg-[#1a202c] mx-auto my-2" />
+                )}
 
-          {/* Navigation Links */}
-          <nav className="px-2 space-y-1 flex-1 mt-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === '/'}
-                  onClick={onCloseMobile}
-                  className={({ isActive }) =>
-                    `flex items-center ${
-                      isHovered ? 'gap-3 px-3 py-2 justify-start' : 'justify-center p-2.5'
-                    } rounded-xl text-xs transition-all font-medium group ${
-                      isActive
-                        ? 'bg-[#131b2e] text-[#38bdf8] font-semibold border border-[#00c2ff]/30 shadow-sm'
-                        : 'text-slate-300 hover:text-white hover:bg-[#14171f]'
-                    }`
-                  }
-                  title={!isHovered ? item.label : undefined}
-                >
-                  {({ isActive }) => (
-                    <>
-                      <Icon
-                        className={`w-4 h-4 shrink-0 transition-colors ${
-                          isActive ? 'text-[#38bdf8]' : 'text-slate-400 group-hover:text-slate-200'
-                        }`}
-                      />
-                      {isHovered && (
-                        <span className="truncate whitespace-nowrap animate-in fade-in duration-200">
-                          {item.label}
-                        </span>
-                      )}
-                    </>
-                  )}
-                </NavLink>
-              );
-            })}
+                {/* Items in section */}
+                <div className="space-y-1.5">
+                  {section.items.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        end={item.to === '/'}
+                        onClick={onCloseMobile}
+                        className={({ isActive }) =>
+                          `flex items-center ${
+                            isHovered
+                              ? 'gap-3.5 px-3.5 py-2.5 justify-start'
+                              : 'justify-center w-12 h-12 mx-auto'
+                          } rounded-xl text-sm transition-all font-bold group select-none ${
+                            isActive
+                              ? 'bg-gradient-to-r from-cyan-500/20 via-sky-500/15 to-blue-600/10 text-white font-black border-2 border-[#00c2ff]/40 shadow-lg shadow-cyan-950/40'
+                              : 'text-slate-300 hover:text-white hover:bg-[#141722] border border-transparent hover:border-[#1e2535]'
+                          }`
+                        }
+                        title={!isHovered ? item.label : undefined}
+                      >
+                        {({ isActive }) => (
+                          <>
+                            <Icon
+                              className={`w-5 h-5 shrink-0 transition-colors ${
+                                isActive ? 'text-[#00c2ff]' : 'text-slate-400 group-hover:text-slate-200'
+                              }`}
+                            />
+                            {isHovered && (
+                              <span className="truncate whitespace-nowrap text-sm font-bold animate-in fade-in duration-200">
+                                {item.label}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </NavLink>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
         </div>
 
         {/* Bottom Section: Placement Readiness Score, Theme Switcher & Profile Card */}
-        <div className="p-2.5 border-t border-[#191c24] space-y-2 bg-[#0a0c10]">
+        <div className="p-3 border-t border-[#191c24] space-y-2.5 bg-[#0a0c10]">
           {/* Placement Readiness Score Widget */}
           {isHovered ? (
             <div
               onClick={() => setShowReadinessModal(true)}
-              className="flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-[#12151c] to-[#161c28] border border-emerald-500/30 hover:border-emerald-500/60 transition-all cursor-pointer group shadow-sm animate-in fade-in duration-200"
+              className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-[#12151c] to-[#161c28] border border-emerald-500/30 hover:border-emerald-500/60 transition-all cursor-pointer group shadow-sm animate-in fade-in duration-200"
               title="Click to view detailed Placement Readiness breakdown"
             >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="relative w-8 h-8 rounded-full bg-emerald-500/10 border-2 border-emerald-500/40 flex items-center justify-center text-[11px] font-black text-emerald-400 shrink-0 group-hover:scale-105 transition-transform">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative w-9 h-9 rounded-full bg-emerald-500/10 border-2 border-emerald-500/40 flex items-center justify-center text-xs font-black text-emerald-400 shrink-0 group-hover:scale-105 transition-transform">
                   85
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-[9px] font-extrabold text-emerald-400 tracking-wider flex items-center gap-1 uppercase whitespace-nowrap">
+                  <span className="text-[10px] font-black text-emerald-400 tracking-wider flex items-center gap-1 uppercase whitespace-nowrap">
                     <span>PLACEMENT READINESS</span>
                   </span>
-                  <span className="text-xs font-black text-white flex items-center gap-1">
-                    85% <span className="text-[10px] text-slate-400 font-normal">/ 100</span>
+                  <span className="text-sm font-black text-white flex items-center gap-1">
+                    85% <span className="text-xs text-slate-400 font-normal">/ 100</span>
                   </span>
                 </div>
               </div>
-              <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[9px] font-bold shrink-0 border border-emerald-500/30">
+              <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-black shrink-0 border border-emerald-500/30">
                 Ready ⭐
               </span>
             </div>
@@ -293,7 +327,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
             <div className="flex justify-center">
               <button
                 onClick={() => setShowReadinessModal(true)}
-                className="w-10 h-10 rounded-full bg-emerald-500/10 border-2 border-emerald-500/40 flex items-center justify-center text-[11px] font-black text-emerald-400 hover:scale-105 transition-transform"
+                className="w-12 h-12 rounded-full bg-emerald-500/10 border-2 border-emerald-500/40 flex items-center justify-center text-xs font-black text-emerald-400 hover:scale-105 transition-transform shadow-md shadow-emerald-950/30"
                 title="Placement Readiness: 85/100"
               >
                 85
@@ -306,24 +340,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
             <div className="p-1 rounded-xl bg-[#12151c] border border-[#1e2330] flex items-center justify-between text-xs animate-in fade-in duration-200">
               <button
                 onClick={() => theme === 'dark' && toggleTheme()}
-                className={`flex-1 py-1 px-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all text-[11px] ${
+                className={`flex-1 py-1.5 px-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-xs ${
                   theme === 'light'
                     ? 'bg-white text-slate-900 shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <Sun className="w-3.5 h-3.5" />
+                <Sun className="w-4 h-4" />
                 <span>Light</span>
               </button>
               <button
                 onClick={() => theme === 'light' && toggleTheme()}
-                className={`flex-1 py-1 px-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all text-[11px] ${
+                className={`flex-1 py-1.5 px-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-xs ${
                   theme === 'dark'
                     ? 'bg-[#000000] text-white shadow-sm border border-slate-700'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <Moon className="w-3.5 h-3.5 text-[#38bdf8]" />
+                <Moon className="w-4 h-4 text-[#38bdf8]" />
                 <span>Dark</span>
               </button>
             </div>
@@ -331,29 +365,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
             <div className="flex justify-center">
               <button
                 onClick={toggleTheme}
-                className="w-9 h-9 rounded-xl bg-[#12151c] hover:bg-[#1a202c] border border-[#1e2330] flex items-center justify-center text-[#38bdf8]"
+                className="w-12 h-12 rounded-xl bg-[#12151c] hover:bg-[#1a202c] border border-[#1e2330] flex items-center justify-center text-[#38bdf8] hover:scale-105 transition-transform"
                 title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
               >
-                {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+                {theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
               </button>
             </div>
           )}
 
           {/* Student Profile User Bar */}
           {isHovered ? (
-            <div className="pt-1 flex items-center justify-between gap-2 animate-in fade-in duration-200">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-[#0284c7] text-white flex items-center justify-center text-xs font-black shrink-0">
+            <div className="pt-1 flex items-center justify-between gap-2.5 animate-in fade-in duration-200">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-full bg-[#0284c7] text-white flex items-center justify-center text-sm font-black shrink-0 border border-sky-400/40">
                   {initials}
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-black text-slate-100 uppercase truncate whitespace-nowrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-black text-slate-100 uppercase truncate whitespace-nowrap">
                       {user?.fullName || 'PRAJWAL'}
                     </span>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 fill-emerald-500/20" />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 fill-emerald-500/20" />
                   </div>
-                  <span className="text-[10px] text-slate-400 truncate whitespace-nowrap">
+                  <span className="text-xs text-slate-400 truncate whitespace-nowrap">
                     {user?.email || 'student@skillportal.com'}
                   </span>
                 </div>
@@ -361,17 +395,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
 
               <button
                 onClick={handleLogout}
-                className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg transition-colors shrink-0"
+                className="p-2 text-slate-400 hover:text-rose-400 hover:bg-[#1a1f2c] rounded-xl transition-colors shrink-0"
                 title="Sign Out"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-4.5 h-4.5" />
               </button>
             </div>
           ) : (
             <div className="flex justify-center">
               <button
                 onClick={() => navigate('/profile')}
-                className="w-9 h-9 rounded-full bg-[#0284c7] hover:ring-2 hover:ring-[#38bdf8] text-white flex items-center justify-center text-xs font-black shrink-0 transition-all"
+                className="w-12 h-12 rounded-full bg-[#0284c7] hover:ring-2 hover:ring-[#38bdf8] text-white flex items-center justify-center text-sm font-black shrink-0 transition-all hover:scale-105 border border-sky-400/40"
                 title={user?.fullName || 'Prajwal'}
               >
                 {initials}
