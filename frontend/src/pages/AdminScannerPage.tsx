@@ -775,21 +775,22 @@ export const AdminScannerPage: React.FC = () => {
               </div>
             )}
 
-            {/* Direct SMTP Credentials Setup */}
+            {/* Direct Email Credentials Setup */}
             <div className="p-4 rounded-2xl bg-[#141824] border border-[#1e2538] space-y-3">
               <div>
                 <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
                   <Key className="w-3.5 h-3.5 text-[#00c2ff]" />
-                  <span>Connect Gmail SMTP Credentials</span>
+                  <span>Connect Email Service (Resend HTTPS or Gmail SMTP)</span>
                 </h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Paste your 16-character Google App Password below to immediately activate real-time student email dispatch.
+                <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                  <strong className="text-amber-400">Notice:</strong> Render Free Tier blocks outbound SMTP ports 465 & 587. <br />
+                  <strong className="text-emerald-400">Recommended for Render:</strong> Paste a free <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="text-[#00c2ff] underline font-bold">Resend API Key</a> (<span className="font-mono text-emerald-300 font-bold">re_...</span>, 1-click Google login, no credit card required) to send emails instantly over HTTPS (Port 443).
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Sender Email</label>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Sender Email / Account</label>
                   <input
                     type="email"
                     value={smtpSenderEmail}
@@ -800,28 +801,40 @@ export const AdminScannerPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">
-                    Google 16-Letter App Password
+                    Resend API Key (re_...) or Google App Password
                   </label>
                   <input
                     type="password"
                     value={smtpPasswordInput}
                     onChange={(e) => setSmtpPasswordInput(e.target.value)}
-                    placeholder="xxxx xxxx xxxx xxxx"
+                    placeholder="re_xxxxxxxx (Resend) or 16-letter pass"
                     className="w-full bg-[#0c0e14] border border-[#21293a] focus:border-[#00b4d8] text-white text-xs px-3 py-2 rounded-xl outline-none transition-all placeholder:text-slate-500 font-mono"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <a
-                  href="https://myaccount.google.com/apppasswords"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] text-[#00c2ff] hover:underline flex items-center gap-1 font-semibold"
-                >
-                  <span>Generate App Password on Google Account</span>
-                  <ExternalLink className="w-2.5 h-2.5" />
-                </a>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div className="flex items-center gap-3">
+                  <a
+                    href="https://resend.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-emerald-400 hover:underline flex items-center gap-1 font-bold"
+                  >
+                    <span>⚡ 1-Click Free Resend Key (No card needed)</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                  <span className="text-slate-600 text-xs">•</span>
+                  <a
+                    href="https://myaccount.google.com/apppasswords"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-slate-400 hover:text-[#00c2ff] hover:underline flex items-center gap-1 font-medium"
+                  >
+                    <span>Google App Password</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
 
                 <button
                   type="button"
@@ -830,7 +843,7 @@ export const AdminScannerPage: React.FC = () => {
                   className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
                 >
                   {savingSettings ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                  <span>{savingSettings ? 'Connecting...' : 'Save & Connect SMTP'}</span>
+                  <span>{savingSettings ? 'Connecting...' : 'Save & Connect'}</span>
                 </button>
               </div>
 

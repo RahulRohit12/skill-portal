@@ -12,6 +12,12 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Properties;
@@ -152,9 +158,174 @@ public class EmailServiceImpl implements EmailService {
         }
     }
 
+    private boolean isHttpApiConfigured() {
+        if (mailPassword == null) return false;
+        String trimmed = mailPassword.trim();
+        return trimmed.startsWith("re_") || trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("xkeysib-");
+    }
+
     private boolean isSmtpConfigured() {
         return mailUsername != null && !mailUsername.trim().isEmpty()
                 && mailPassword != null && !mailPassword.trim().isEmpty();
+    }
+
+    private String getProviderName() {
+        if (mailPassword == null || mailPassword.trim().isEmpty()) return "None";
+        String trimmed = mailPassword.trim();
+        if (trimmed.startsWith("re_")) return "Resend HTTPS API (Port 443)";
+        if (trimmed.startsWith("http")) return "Webhook HTTPS API (Port 443)";
+        if (trimmed.startsWith("xkeysib-")) return "Brevo HTTPS API (Port 443)";
+        return "Gmail SMTP (Port " + mailPort + ")";
+    }
+
+    private String escapeJson(String raw) {
+        if (raw == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (char c : raw.toCharArray()) {
+            switch (c) {
+                case '"': sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\b': sb.append("\\b"); break;
+                case '\f': sb.append("\\f"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:
+                    if (c < 32 || c > 126) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        return sb.toString();
+    }
+
+    private boolean sendViaResend(String apiKey, String targetEmail, String subject, String htmlContent) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
+
+        String escapedSubject = escapeJson(subject);
+        String escapedHtml = escapeJson(htmlContent);
+        String escapedTarget = escapeJson(targetEmail);
+
+        String jsonPayload = String.format(
+                "{\"from\":\"SkillX Academy <onboarding@resend.dev>\",\"to\":[\"%s\"],\"subject\":\"%s\",\"html\":\"%s\"}",
+                escapedTarget, escapedSubject, escapedHtml
+        );
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://api.resend.com/emails"))
+                .header("Authorization", "Bearer " + apiKey.trim())
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(12))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() >= 200 && response.statusCode() < 300) {
+            log.info("Email delivered via Resend HTTP API to {}: {}", targetEmail, response.body());
+            return true;
+        } else {
+            log.error("Resend API failed (HTTP {}): {}", response.statusCode(), response.body());
+            throw new Exception("Resend API (HTTP " + response.statusCode() + "): " + response.body());
+        }
+    }
+
+    private boolean sendViaWebhook(String webhookUrl, String targetEmail, String subject, String htmlContent) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .followRedirects(HttpClient.Redirect.ALWAYS)
+                .build();
+
+        String escapedSubject = escapeJson(subject);
+        String escapedHtml = escapeJson(htmlContent);
+        String escapedTarget = escapeJson(targetEmail);
+
+        String jsonPayload = String.format(
+                "{\"to\":\"%s\",\"subject\":\"%s\",\"html\":\"%s\"}",
+                escapedTarget, escapedSubject, escapedHtml
+        );
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(webhookUrl.trim()))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(12))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 200 && response.statusCode() < 300) {
+            log.info("Email delivered via Webhook to {}: {}", targetEmail, response.body());
+            return true;
+        } else {
+            throw new Exception("Webhook delivery failed (HTTP " + response.statusCode() + "): " + response.body());
+        }
+    }
+
+    private boolean sendViaBrevo(String apiKey, String senderEmail, String targetEmail, String subject, String htmlContent) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
+
+        String fromEmail = (senderEmail != null && !senderEmail.trim().isEmpty()) ? senderEmail.trim() : "diggaviprajwal55@gmail.com";
+        String escapedSubject = escapeJson(subject);
+        String escapedHtml = escapeJson(htmlContent);
+        String escapedTarget = escapeJson(targetEmail);
+        String escapedFrom = escapeJson(fromEmail);
+
+        String jsonPayload = String.format(
+                "{\"sender\":{\"name\":\"SkillX Academy\",\"email\":\"%s\"},\"to\":[{\"email\":\"%s\"}],\"subject\":\"%s\",\"htmlContent\":\"%s\"}",
+                escapedFrom, escapedTarget, escapedSubject, escapedHtml
+        );
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://api.brevo.com/v3/smtp/email"))
+                .header("api-key", apiKey.trim())
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(12))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 200 && response.statusCode() < 300) {
+            log.info("Email delivered via Brevo HTTP API to {}: {}", targetEmail, response.body());
+            return true;
+        } else {
+            throw new Exception("Brevo API (HTTP " + response.statusCode() + "): " + response.body());
+        }
+    }
+
+    private boolean sendEmailUnified(String targetEmail, String subject, String plainText, String htmlContent) throws Exception {
+        // Priority 1: Check HTTP API (Resend, Webhook, Brevo)
+        if (isHttpApiConfigured()) {
+            String trimmed = mailPassword.trim();
+            if (trimmed.startsWith("re_")) {
+                return sendViaResend(trimmed, targetEmail, subject, htmlContent);
+            }
+            if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+                return sendViaWebhook(trimmed, targetEmail, subject, htmlContent);
+            }
+            if (trimmed.startsWith("xkeysib-")) {
+                return sendViaBrevo(trimmed, mailUsername, targetEmail, subject, htmlContent);
+            }
+        }
+
+        // Priority 2: Fall back to SMTP ports 465 and 587
+        if (isSmtpConfigured()) {
+            try {
+                return sendViaSmtpWithFallback(targetEmail, subject, plainText, htmlContent);
+            } catch (Exception ex) {
+                if (ex.getMessage() != null && ex.getMessage().contains("SocketTimeoutException")) {
+                    throw new Exception("Render Free Tier blocks raw SMTP ports 465 & 587. Please use a free Resend API Key (starts with re_) from https://resend.com (takes 10s with Google Login) which connects instantly over HTTPS Port 443.");
+                }
+                throw ex;
+            }
+        }
+
+        throw new Exception("No email service configured. Please provide a Resend API Key (re_...) or Google App Password.");
     }
 
     @Override
@@ -214,26 +385,26 @@ public class EmailServiceImpl implements EmailService {
                     effectiveSession
             );
 
-            boolean sentViaSmtp = false;
+            boolean sentSuccessfully = false;
             String errorMessage = null;
 
-            if (isSmtpConfigured()) {
+            if (isHttpApiConfigured() || isSmtpConfigured()) {
                 try {
-                    sentViaSmtp = sendViaSmtpWithFallback(targetEmail, subject, plainText, htmlContent);
-                    log.info("Real-time attendance email successfully dispatched via SMTP to {}", targetEmail);
+                    sentSuccessfully = sendEmailUnified(targetEmail, subject, plainText, htmlContent);
+                    log.info("Real-time attendance email successfully dispatched to {}", targetEmail);
                 } catch (Exception ex) {
                     errorMessage = ex.getMessage();
-                    log.error("SMTP email delivery failed for recipient {}: {}", targetEmail, errorMessage);
+                    log.error("Email delivery failed for recipient {}: {}", targetEmail, errorMessage);
                 }
             } else {
-                log.info("[SIMULATED EMAIL] Recipient: {} | Student: {} ({}) | Session: {} | Note: SMTP password not configured yet.",
+                log.info("[SIMULATED EMAIL] Recipient: {} | Student: {} ({}) | Session: {} | Note: Email credentials not configured yet.",
                         targetEmail, effectiveStudentName, effectiveStudentId, effectiveSession);
             }
 
             // Persist to email_logs audit table
             try {
                 String logSql = "INSERT INTO email_logs (recipient_email, student_name, email_type, subject, status, error_message) VALUES (?, ?, 'ATTENDANCE_MARKED', ?, ?, ?)";
-                String status = sentViaSmtp ? "SENT" : (errorMessage != null ? "FAILED" : "SIMULATED");
+                String status = sentSuccessfully ? "SENT" : (errorMessage != null ? "FAILED" : "SIMULATED");
                 jdbcTemplate.update(logSql, targetEmail, effectiveStudentName, subject, status, errorMessage);
             } catch (Exception dbEx) {
                 log.debug("Notice recording email audit log: {}", dbEx.getMessage());
@@ -254,17 +425,13 @@ public class EmailServiceImpl implements EmailService {
         boolean hasPass = mailPassword != null && !mailPassword.trim().isEmpty();
         dto.setPasswordConfigured(hasPass);
 
-        boolean ready = isSmtpConfigured();
+        boolean ready = isHttpApiConfigured() || isSmtpConfigured();
         dto.setReadyToSend(ready);
 
         if (!ready) {
-            if (mailUsername == null || mailUsername.trim().isEmpty()) {
-                dto.setStatusMessage("Sender email is not set. Enter your Gmail in settings.");
-            } else if (!hasPass) {
-                dto.setStatusMessage("Google App Password not configured yet. Paste your 16-character code below and click 'Save & Connect'.");
-            }
+            dto.setStatusMessage("No email delivery configured yet. Paste your free Resend API key (re_...) or Google App Password.");
         } else {
-            dto.setStatusMessage("SMTP is connected and active with sender " + mailUsername.trim() + " (Port " + mailPort + ")");
+            dto.setStatusMessage("Email delivery active via " + getProviderName());
         }
 
         try {
@@ -300,7 +467,7 @@ public class EmailServiceImpl implements EmailService {
                 : getDefaultStudentEmail();
         result.setRecipient(target);
 
-        if (mailUsername == null || mailUsername.trim().isEmpty()) {
+        if (!isHttpApiConfigured() && (mailUsername == null || mailUsername.trim().isEmpty())) {
             result.setSuccess(false);
             result.setMessage("Sender email is missing. Set your Gmail address in settings.");
             return result;
@@ -308,28 +475,27 @@ public class EmailServiceImpl implements EmailService {
 
         if (mailPassword == null || mailPassword.trim().isEmpty()) {
             result.setSuccess(false);
-            result.setMessage("Google App Password is not configured. Please paste your 16-character App Password.");
+            result.setMessage("Credentials not configured. Please paste your Resend API Key (re_...) or Google App Password.");
             return result;
         }
 
         String subject = "🧪 Test Verification: SkillX Attendance Real-Time Email System";
         String html = "<!DOCTYPE html><html><body style='font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif;background:#0f172a;padding:24px;color:#f8fafc;'>" +
                 "<div style='max-width:520px;margin:auto;background:#1e293b;border-radius:16px;padding:32px;border:1px solid #334155;'>" +
-                "<h2 style='color:#38bdf8;margin-top:0;'>🧪 SMTP Connection Verified!</h2>" +
-                "<p style='color:#cbd5e1;font-size:14px;line-height:1.6;'>This test email confirms that your <strong>SkillX Real-Time Attendance System</strong> is successfully connected to Gmail SMTP and delivering emails.</p>" +
+                "<h2 style='color:#38bdf8;margin-top:0;'>🧪 Email Delivery Verified!</h2>" +
+                "<p style='color:#cbd5e1;font-size:14px;line-height:1.6;'>This test email confirms that your <strong>SkillX Real-Time Attendance System</strong> is successfully connected via <strong>" + getProviderName() + "</strong> and delivering emails.</p>" +
                 "<div style='background:#0f172a;border-radius:10px;padding:16px;margin:20px 0;font-size:13px;border:1px solid #334155;'>" +
-                "<div><strong style='color:#94a3b8;'>Sender Account:</strong> <span style='color:#38bdf8;font-family:monospace;'>" + mailUsername.trim() + "</span></div>" +
+                "<div><strong style='color:#94a3b8;'>Provider:</strong> <span style='color:#38bdf8;font-family:monospace;'>" + getProviderName() + "</span></div>" +
                 "<div style='margin-top:8px;'><strong style='color:#94a3b8;'>Delivered To:</strong> <span style='color:#34d399;font-family:monospace;'>" + target + "</span></div>" +
-                "<div style='margin-top:8px;'><strong style='color:#94a3b8;'>Host:</strong> <span style='color:#cbd5e1;font-family:monospace;'>" + mailHost + " (Port " + mailPort + ")</span></div>" +
                 "<div style='margin-top:8px;'><strong style='color:#94a3b8;'>Timestamp:</strong> <span style='color:#cbd5e1;font-family:monospace;'>" + Instant.now() + "</span></div>" +
                 "</div>" +
                 "<p style='color:#34d399;font-weight:700;font-size:14px;margin-bottom:0;'>✓ Live Attendance QR scans will now deliver real-time notices to registered students!</p>" +
                 "</div></body></html>";
 
-        String plainText = "SMTP Test Verification Success!\n\nSender: " + mailUsername.trim() + "\nRecipient: " + target + "\nHost: " + mailHost + "\nTime: " + Instant.now();
+        String plainText = "Test Verification Success!\n\nProvider: " + getProviderName() + "\nRecipient: " + target + "\nTime: " + Instant.now();
 
         try {
-            sendViaSmtpWithFallback(target, subject, plainText, html);
+            sendEmailUnified(target, subject, plainText, html);
             result.setSuccess(true);
             result.setMessage("Test email successfully delivered to " + target + "! Check your inbox (or Spam/Promotions folder).");
 
@@ -344,7 +510,7 @@ public class EmailServiceImpl implements EmailService {
             log.error("Failed to dispatch test email to {}: {}", target, errorMsg);
 
             result.setSuccess(false);
-            result.setMessage("SMTP Delivery Failed: " + errorMsg);
+            result.setMessage("Delivery Failed: " + errorMsg);
             result.setErrorDetails(errorMsg);
 
             try {
@@ -381,7 +547,11 @@ public class EmailServiceImpl implements EmailService {
                 jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('smtp_username', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", mailUsername);
             }
             if (request.getSmtpPassword() != null && !request.getSmtpPassword().trim().isEmpty()) {
-                this.mailPassword = request.getSmtpPassword().replaceAll("\\s+", "").trim();
+                String pass = request.getSmtpPassword().trim();
+                if (!pass.startsWith("http://") && !pass.startsWith("https://")) {
+                    pass = pass.replaceAll("\\s+", "");
+                }
+                this.mailPassword = pass;
                 jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('smtp_password', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", mailPassword);
             }
             if (request.getDefaultStudentEmail() != null && !request.getDefaultStudentEmail().trim().isEmpty()) {
