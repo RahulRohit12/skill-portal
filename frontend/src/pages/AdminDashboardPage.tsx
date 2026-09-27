@@ -13,7 +13,8 @@ import {
   FolderArchive,
   Megaphone,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Radio
 } from 'lucide-react';
 import api from '../api/client';
 import { AdminOverview, BatchItem, CourseItem } from '../types';
@@ -21,6 +22,7 @@ import { LoadingSpinner } from '../components/common/LoadingSpinner';
 
 // Tab Components
 import { AdminOverviewTab } from '../components/admin/AdminOverviewTab';
+import { AdminLiveClassesTab } from '../components/admin/AdminLiveClassesTab';
 import { AdminStudentsTab } from '../components/admin/AdminStudentsTab';
 import { AdminBatchesTab } from '../components/admin/AdminBatchesTab';
 import { AdminCoursesTab } from '../components/admin/AdminCoursesTab';
@@ -33,6 +35,7 @@ import { AdminAnnouncementsTab } from '../components/admin/AdminAnnouncementsTab
 
 type AdminTab =
   | 'overview'
+  | 'live'
   | 'students'
   | 'batches'
   | 'courses'
@@ -87,6 +90,7 @@ export const AdminDashboardPage: React.FC = () => {
 
   const navTabs: Array<{ id: AdminTab; label: string; icon: React.FC<{ className?: string }> }> = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'live', label: 'Live Sessions', icon: Radio },
     { id: 'students', label: 'Students Roster', icon: Users },
     { id: 'batches', label: 'Batches & Cohorts', icon: GraduationCap },
     { id: 'courses', label: 'Curriculum Tree', icon: FolderTree },
@@ -175,6 +179,10 @@ export const AdminDashboardPage: React.FC = () => {
             onNavigateTab={(t) => handleTabChange(t as AdminTab)}
             onRefresh={loadData}
           />
+        )}
+
+        {currentTab === 'live' && (
+          <AdminLiveClassesTab courses={courses} batches={batches} />
         )}
 
         {currentTab === 'students' && (

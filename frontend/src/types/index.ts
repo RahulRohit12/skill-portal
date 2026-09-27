@@ -1041,3 +1041,28 @@ export interface EmailTestResult {
   errorDetails?: string;
 }
 
+export interface LiveClassItem {
+  id: number;
+  courseId?: number;
+  courseTitle?: string;
+  batchId: number;
+  batchName: string;
+  title: string;
+  description?: string;
+  instructorName: string;
+  meetingLink: string;
+  status: 'ACTIVE' | 'ENDED';
+  startedAt: string;
+  endedAt?: string;
+  createdAt: string;
+}
+
+export interface StartLiveClassRequest {
+  batchId: number;
+  courseId?: number;
+  title: string;
+  description?: string;
+  instructorName: string;
+  meetingLink: string;
+}
+
