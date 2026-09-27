@@ -12,6 +12,13 @@ const api = axios.create({
   },
 });
 
+// Non-blocking background warmup ping for cloud cold-start mitigation
+if (!import.meta.env.DEV) {
+  try {
+    fetch(`${apiBaseUrl}/health`, { method: 'GET', keepalive: true }).catch(() => {});
+  } catch {}
+}
+
 // ==========================================
 // Ultra-Fast SWR In-Memory & Session Cache
 // ==========================================

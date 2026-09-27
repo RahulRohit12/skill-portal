@@ -50,11 +50,11 @@ public class JobAggregationService {
     }
 
     /**
-     * Default automated sync: Runs every 10 minutes
+     * Automated sync: Runs every 30 minutes to balance freshness and low CPU/memory overhead
      */
-    @Scheduled(cron = "0 */10 * * * *")
+    @Scheduled(cron = "0 */30 * * * *")
     public void scheduledSync() {
-        log.info("Triggered 10-minute automated Multi-Source Job Discovery sync...");
+        log.info("Triggered 30-minute automated Multi-Source Job Discovery sync...");
         aggregateAllSources();
     }
 

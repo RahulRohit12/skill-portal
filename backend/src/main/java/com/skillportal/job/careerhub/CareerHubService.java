@@ -77,9 +77,9 @@ public class CareerHubService {
     }
 
     /**
-     * Background extractor scheduled every 15 minutes
+     * Background extractor scheduled every 45 minutes
      */
-    @Scheduled(cron = "0 */15 * * * *")
+    @Scheduled(cron = "0 */45 * * * *")
     public void scheduledExtraction() {
         log.info("Triggering scheduled background Career Hub extraction...");
         triggerBackgroundExtraction();
