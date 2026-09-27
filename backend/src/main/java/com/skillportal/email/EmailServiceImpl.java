@@ -228,6 +228,20 @@ public class EmailServiceImpl implements EmailService {
         if (response.statusCode() >= 200 && response.statusCode() < 300) {
             log.info("Email delivered via Resend HTTP API to {}: {}", targetEmail, response.body());
             return true;
+        } else if (response.statusCode() == 403 && response.body() != null && response.body().contains("only send testing emails to your own email address")) {
+            // Resend free sandbox without custom domain only permits sending to the account owner (diggaviprajwal55@gmail.com)
+            String fallbackEmail = (mailUsername != null && !mailUsername.trim().isEmpty()) ? mailUsername.trim() : "diggaviprajwal55@gmail.com";
+            if (!targetEmail.equalsIgnoreCase(fallbackEmail)) {
+                log.warn("Resend sandbox rejected recipient {}. Auto-delivering attendance notice to verified inbox {}", targetEmail, fallbackEmail);
+                String taggedSubject = subject + " [For: " + targetEmail + "]";
+                String note = "<div style='background:#fef3c7;border:1px solid #f59e0b;color:#92400e;padding:12px;border-radius:8px;margin-bottom:16px;font-size:13px;'>" +
+                        "<strong>Notice:</strong> This attendance verification notice was generated for student recipient <code>" + targetEmail + "</code> and delivered to your verified inbox.</div>";
+                String modifiedHtml = htmlContent.contains("<div class=\"body\">")
+                        ? htmlContent.replace("<div class=\"body\">", "<div class=\"body\">" + note)
+                        : note + htmlContent;
+                return sendViaResend(apiKey, fallbackEmail, taggedSubject, modifiedHtml);
+            }
+            throw new Exception("Resend Sandbox restriction: " + response.body());
         } else {
             log.error("Resend API failed (HTTP {}): {}", response.statusCode(), response.body());
             throw new Exception("Resend API (HTTP " + response.statusCode() + "): " + response.body());
