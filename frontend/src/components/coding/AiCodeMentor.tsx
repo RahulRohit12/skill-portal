@@ -39,7 +39,19 @@ interface Message {
   text: string;
   type?: 'hint' | 'bug' | 'complexity' | 'general';
   timestamp: string;
+  modelUsed?: string;
 }
+
+const CANDIDATE_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-2.5-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-2.0-flash-exp',
+  'gemini-1.5-pro-latest',
+  'gemini-1.5-pro',
+  'gemini-pro',
+  'gemini-1.5-flash'
+];
 
 export const AiCodeMentor: React.FC<AiCodeMentorProps> = ({
   problemTitle,
@@ -55,6 +67,14 @@ export const AiCodeMentor: React.FC<AiCodeMentorProps> = ({
       if (stored) return stored;
     } catch {}
     return (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+  });
+
+  const [activeModel, setActiveModel] = useState<string>(() => {
+    try {
+      return localStorage.getItem('skillportal_working_gemini_model') || 'gemini-2.0-flash';
+    } catch {
+      return 'gemini-2.0-flash';
+    }
   });
 
   const [messages, setMessages] = useState<Message[]>([
@@ -226,15 +246,58 @@ export const AiCodeMentor: React.FC<AiCodeMentorProps> = ({
     }
   };
 
+  // Dynamic discovery of working Gemini model for this API key
+  const discoverWorkingModel = async (key: string): Promise<string | null> => {
+    try {
+      const listRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${key.trim()}`
+      );
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        if (Array.isArray(listData.models)) {
+          const supported = listData.models.filter(
+            (m: any) =>
+              Array.isArray(m.supportedGenerationMethods) &&
+              m.supportedGenerationMethods.includes('generateContent')
+          );
+
+          for (const cand of CANDIDATE_MODELS) {
+            const match = supported.find(
+              (m: any) => m.name === `models/${cand}` || m.name.endsWith(cand)
+            );
+            if (match) {
+              const clean = match.name.replace(/^models\//, '');
+              return clean;
+            }
+          }
+
+          if (supported.length > 0) {
+            return supported[0].name.replace(/^models\//, '');
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Model discovery failed:', e);
+    }
+    return null;
+  };
+
   // Test Gemini Key Connection
   const handleTestKey = async (keyToTest: string) => {
     if (!keyToTest.trim()) return;
     setKeyTestStatus('testing');
-    setKeyTestMessage('Connecting to Google Gemini API...');
+    setKeyTestMessage('Inspecting available Gemini models for your API key...');
 
     try {
+      const cleanKey = keyToTest.trim();
+      // First try listing models as instructed by Google
+      const discovered = await discoverWorkingModel(cleanKey);
+
+      const modelToTry = discovered || 'gemini-2.0-flash';
+
+      // Test generating content
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${keyToTest.trim()}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent?key=${cleanKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -247,10 +310,41 @@ export const AiCodeMentor: React.FC<AiCodeMentorProps> = ({
       const data = await res.json();
       if (res.ok && data?.candidates?.[0]?.content?.parts?.[0]?.text) {
         setKeyTestStatus('valid');
-        setKeyTestMessage('Gemini 1.5 Flash Connected Successfully! 🎉');
+        setActiveModel(modelToTry);
+        localStorage.setItem('skillportal_working_gemini_model', modelToTry);
+        setKeyTestMessage(`Connected to Google Gemini (${modelToTry}) successfully! 🎉`);
       } else {
-        setKeyTestStatus('invalid');
-        setKeyTestMessage(data?.error?.message || 'Invalid API key or model access restricted.');
+        // Try fallback candidate models
+        let foundWorking = false;
+        for (const cand of CANDIDATE_MODELS) {
+          if (cand === modelToTry) continue;
+          try {
+            const probeRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${cand}:generateContent?key=${cleanKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: 'Respond with: "OK"' }] }],
+                }),
+              }
+            );
+            const probeData = await probeRes.json();
+            if (probeRes.ok && probeData?.candidates?.[0]?.content?.parts?.[0]?.text) {
+              setKeyTestStatus('valid');
+              setActiveModel(cand);
+              localStorage.setItem('skillportal_working_gemini_model', cand);
+              setKeyTestMessage(`Connected to Google Gemini (${cand}) successfully! 🎉`);
+              foundWorking = true;
+              break;
+            }
+          } catch {}
+        }
+
+        if (!foundWorking) {
+          setKeyTestStatus('invalid');
+          setKeyTestMessage(data?.error?.message || 'Invalid API key or model access restricted.');
+        }
       }
     } catch (err: any) {
       setKeyTestStatus('invalid');
@@ -272,10 +366,108 @@ export const AiCodeMentor: React.FC<AiCodeMentorProps> = ({
     setApiKey('');
     try {
       localStorage.removeItem('skillportal_gemini_api_key');
+      localStorage.removeItem('skillportal_working_gemini_model');
     } catch {}
     setKeyInput('');
     setKeyTestStatus('idle');
     setKeyTestMessage('');
+  };
+
+  // Real Gemini Multi-Model Execution Engine
+  const requestRealGemini = async (
+    key: string,
+    userPrompt: string
+  ): Promise<{ text: string; model: string }> => {
+    const cleanKey = key.trim();
+
+    const systemPrompt = `You are an elite Computer Science Coding Mentor and Placement Coach at Skillex Academy.
+Problem Title: ${problemTitle}
+Problem Description: ${problemDescription}
+Programming Language: ${language}
+
+Student's Current Editor Code:
+\`\`\`${language}
+${currentCode}
+\`\`\`
+${lastExecutionError ? `Compiler / Runtime Error Output:\n\`\`\`\n${lastExecutionError}\n\`\`\`` : ''}
+
+Mentor Persona:
+- Warm, expert, clear, encouraging, and direct.
+- If diagnosing a compiler or runtime error, pinpoint the exact line, why the compiler failed, and how the student can fix it.
+- If giving a hint, provide clear intuition and algorithmic step-by-step guidance without writing out the complete solution immediately unless asked.
+- If asked about Time/Space complexity, break down Big-O clearly.
+- Keep formatting clean with bold text, short bullet points, and code snippets when helpful.`;
+
+    const finalQuery = `${systemPrompt}\n\nStudent Query: ${userPrompt}`;
+
+    const payload = {
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: finalQuery }],
+        },
+      ],
+    };
+
+    // Determine models to try in sequence
+    const modelsToTry = Array.from(new Set([
+      activeModel,
+      'gemini-2.0-flash',
+      'gemini-2.5-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-2.0-flash-exp',
+      'gemini-1.5-pro-latest',
+      'gemini-pro',
+      'gemini-1.5-flash'
+    ]));
+
+    let lastErrorMessage = '';
+
+    for (const model of modelsToTry) {
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${cleanKey}`;
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+          setActiveModel(model);
+          try {
+            localStorage.setItem('skillportal_working_gemini_model', model);
+          } catch {}
+          return {
+            text: data.candidates[0].content.parts[0].text,
+            model,
+          };
+        }
+
+        if (data?.error?.message) {
+          lastErrorMessage = data.error.message;
+          // If model is not found, continue trying the next model
+          if (
+            data.error.message.includes('not found') ||
+            data.error.message.includes('not supported') ||
+            res.status === 404
+          ) {
+            continue;
+          } else {
+            // Other error like API key invalid
+            throw new Error(data.error.message);
+          }
+        }
+      } catch (err: any) {
+        if (err.message && !err.message.includes('not found') && !err.message.includes('not supported')) {
+          throw err;
+        }
+        lastErrorMessage = err.message || 'Model probe failed';
+      }
+    }
+
+    throw new Error(lastErrorMessage || 'All Gemini models exhausted.');
   };
 
   // AI Agent Request (Real Gemini API or Heuristic fallback)
@@ -290,7 +482,7 @@ export const AiCodeMentor: React.FC<AiCodeMentorProps> = ({
       userPromptText = 'Can you give me a strategic hint for solving this problem without spoiling the full code?';
     } else if (promptType === 'bug') {
       userPromptText = lastExecutionError
-        ? `I got this error during execution: "${lastExecutionError}". Can you explain why it happened in my code?`
+        ? `I got this error during execution: "${lastExecutionError}". Can you explain why it happened in my code and how to fix it?`
         : 'Can you check my current code for logical bugs or edge-case oversights?';
     } else if (promptType === 'complexity') {
       userPromptText = 'What is the Time and Space complexity of my current solution, and how can it be optimized?';
@@ -315,60 +507,16 @@ export const AiCodeMentor: React.FC<AiCodeMentorProps> = ({
 
     try {
       let replyText = '';
+      let usedModel = '';
 
       if (apiKey && apiKey.trim().length > 10) {
-        // REAL GEMINI API CALL
-        const systemInstruction = `You are an elite, friendly Computer Science Coding Mentor and Placement Coach at Skillex Academy.
-Problem Title: ${problemTitle}
-Problem Description: ${problemDescription}
-Target Language: ${language}
-
-Student's Current Editor Code:
-\`\`\`${language}
-${currentCode}
-\`\`\`
-${lastExecutionError ? `Recent Compiler/Execution Output: ${lastExecutionError}` : ''}
-
-Mentor Persona:
-- Warm, expert, clear, and encouraging.
-- Never write the complete answer code immediately when asked for hints; guide with intuition and algorithm strategy.
-- If diagnosing a bug or error, pinpoint the line and explain why the runtime or compiler threw that error.
-- If asked about Time/Space complexity, provide Big-O notation with clear step-by-step breakdown.
-- Keep answers structured with bold headings and clean formatting.`;
-
-        // Build conversation history for multi-turn chat
-        const conversationHistory = messages.slice(-4).map((m) => ({
-          role: m.sender === 'user' ? 'user' : 'model',
-          parts: [{ text: m.text }],
-        }));
-
-        const payload = {
-          contents: [
-            ...conversationHistory,
-            {
-              role: 'user',
-              parts: [{ text: `${systemInstruction}\n\nStudent Query: ${userPromptText}` }],
-            },
-          ],
-        };
-
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          }
-        );
-
-        const data = await res.json();
-
-        if (res.ok && data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-          replyText = data.candidates[0].content.parts[0].text;
-        } else if (data?.error?.message) {
-          replyText = `⚠️ **Gemini API Notice**: ${data.error.message}\n\n*Falling back to local mentor engine...*\n\n` + getFallbackReply(promptType, userPromptText);
-        } else {
-          replyText = getFallbackReply(promptType, userPromptText);
+        // REAL GEMINI API CALL WITH MULTI-MODEL RESILIENCE
+        try {
+          const geminiResult = await requestRealGemini(apiKey, userPromptText);
+          replyText = geminiResult.text;
+          usedModel = geminiResult.model;
+        } catch (apiErr: any) {
+          replyText = `⚠️ **Gemini API Notice**: ${apiErr.message || 'Could not connect to Gemini'}\n\n*Falling back to local mentor engine...*\n\n` + getFallbackReply(promptType, userPromptText);
         }
       } else {
         // Zero-config intelligent local engine
@@ -381,6 +529,7 @@ Mentor Persona:
         id: aiMsgId,
         sender: 'ai',
         text: replyText,
+        modelUsed: usedModel || undefined,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
@@ -426,9 +575,10 @@ Mentor Persona:
 Your code threw: \`${lastExecutionError}\`
 
 **Root Cause Analysis**:
+- **Syntax / Character Errors**: Look closely at illegal characters like lone backslashes \`\\\` or unclosed operator statements \`x * y *\`.
+- **Operator Incompletion**: In expressions like \`x * y *\`, an operand is missing after the multiplication operator.
 - **Array Bounds / Indexing**: Ensure loop boundary is \`i < arr.length\` rather than \`i <= arr.length\`.
-- **Null Reference**: Verify objects are instantiated before accessing properties.
-- **Stack Overflow / Recursion**: Check that the recursive base case terminates for all inputs.`;
+- **Null Reference**: Verify objects are instantiated before accessing properties.`;
       }
       return `🔍 **Sanity Check & Code Review**:
 - **Return Value**: Check whether every logical branch returns the expected type.
@@ -491,7 +641,7 @@ Make the adjustments in your editor and click **Run Code** to verify against tes
                 title="Click to configure Gemini API Key"
               >
                 <Sparkles className="w-2.5 h-2.5" />
-                <span>{apiKey ? 'Gemini 1.5 Active' : 'Configure Gemini Key'}</span>
+                <span>{apiKey ? `Gemini Active (${activeModel})` : 'Configure Gemini Key'}</span>
               </button>
             </div>
             <p className="text-[10px] text-slate-400">Voice Prompting &bull; Real Gemini AI &bull; Audio Output</p>
@@ -612,7 +762,7 @@ Make the adjustments in your editor and click **Run Code** to verify against tes
                 <div className="flex items-center justify-between gap-3 text-[10px] text-slate-400 pb-1.5 border-b border-white/5">
                   <span className="font-bold flex items-center gap-1">
                     {isAi ? <Bot className="w-3 h-3 text-purple-400" /> : null}
-                    {isAi ? 'AI Mentor (Gemini)' : 'You'}
+                    {isAi ? `AI Mentor (${m.modelUsed || 'Gemini'})` : 'You'}
                   </span>
 
                   <div className="flex items-center gap-2">
@@ -764,7 +914,7 @@ Make the adjustments in your editor and click **Run Code** to verify against tes
               </div>
               <div>
                 <h3 className="text-sm font-black text-white">Google Gemini API Configuration</h3>
-                <p className="text-[11px] text-slate-400">Power your AI Code Mentor with real Gemini intelligence</p>
+                <p className="text-[11px] text-slate-400">Active Model: {activeModel}</p>
               </div>
             </div>
 
