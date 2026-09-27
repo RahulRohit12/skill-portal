@@ -1,6 +1,7 @@
 package com.skillportal.email;
 
 import com.skillportal.common.ApiResponse;
+import com.skillportal.email.EmailDto.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
@@ -26,7 +27,7 @@ public class EmailController {
             EmailDto.EmailDiagnosticDto status = emailService.getEmailStatus();
             return ResponseEntity.ok(ApiResponse.success(status));
         } catch (Exception ex) {
-            EmailDto.EmailDiagnosticDto fallback = new EmailDiagnosticDto();
+            EmailDto.EmailDiagnosticDto fallback = new EmailDto.EmailDiagnosticDto();
             fallback.setStatusMessage("Diagnostics notice: " + ex.getMessage());
             return ResponseEntity.ok(ApiResponse.success(fallback));
         }

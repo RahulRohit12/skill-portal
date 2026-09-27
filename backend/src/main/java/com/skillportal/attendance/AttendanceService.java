@@ -85,12 +85,21 @@ public class AttendanceService {
             sessionId = attendanceRepository.findOrCreateTodaySessionForBatch(student.batchId, adminUserId);
         }
 
-        // Prepare student basic info
+        String timeStr = TIME_FORMATTER.format(LocalTime.now());
+        String dateStr = LocalDate.now().toString();
+        String sessionTitle = "Classroom Session - " + dateStr;
+
+        // Resolve real-time email notification target for this student
+        String targetEmail = (student.email != null && !student.email.trim().isEmpty() && !student.email.contains("@skillportal.com"))
+                ? student.email.trim()
+                : (emailService != null ? emailService.getDefaultStudentEmail() : "diggaviprajwal55@gmail.com");
+
+        // Prepare student basic info with resolved recipient email
         AttendanceDto.StudentBasicInfo studentInfo = new AttendanceDto.StudentBasicInfo();
         studentInfo.setId(student.studentId);
         studentInfo.setStudentIdNumber(student.studentIdNumber);
         studentInfo.setFullName(student.fullName);
-        studentInfo.setEmail(student.email);
+        studentInfo.setEmail(targetEmail);
         studentInfo.setBatchName(student.batchName);
         studentInfo.setAvatarUrl(student.avatarUrl);
 
@@ -100,14 +109,27 @@ public class AttendanceService {
             AttendanceRepository.ExistingAttendanceInfo existing = existingOpt.get();
             attendanceRepository.logAudit(student.studentId, adminUserId, sessionId, token, "DUPLICATE", request.getDeviceInfo(), ipAddress, "Duplicate scan prevented");
 
+            // Dispatch attendance email so testing or re-scanning always delivers real-time confirmation
+            if (emailService != null) {
+                emailService.sendAttendanceMarkedEmail(
+                        targetEmail,
+                        student.fullName,
+                        student.studentIdNumber,
+                        student.batchName,
+                        dateStr,
+                        timeStr,
+                        sessionTitle
+                );
+            }
+
             AttendanceDto.QrScanResponse resp = new AttendanceDto.QrScanResponse();
             resp.setAttendanceStatus("ALREADY_MARKED");
             resp.setMessage("Attendance already marked for today.");
             resp.setStudent(studentInfo);
-            resp.setAttendanceDate(LocalDate.now().toString());
-            resp.setAttendanceTime(existing.markedAt != null ? TIME_FORMATTER.format(existing.markedAt.toLocalDateTime().toLocalTime()) : TIME_FORMATTER.format(LocalTime.now()));
+            resp.setAttendanceDate(dateStr);
+            resp.setAttendanceTime(existing.markedAt != null ? TIME_FORMATTER.format(existing.markedAt.toLocalDateTime().toLocalTime()) : timeStr);
             resp.setSessionId(sessionId);
-            resp.setSessionTitle("Classroom Session - " + LocalDate.now());
+            resp.setSessionTitle(sessionTitle);
             resp.setSource(existing.source != null ? existing.source : "QR_SCAN");
             resp.setMarkedAt(existing.markedAt != null ? existing.markedAt.toInstant().toString() : Instant.now().toString());
             resp.setExistingMarkedAt(existing.markedAt != null ? existing.markedAt.toInstant().toString() : Instant.now().toString());
@@ -118,15 +140,7 @@ public class AttendanceService {
         attendanceRepository.recordQrAttendance(sessionId, student.studentId, adminUserId, "QR_SCAN", request.getDeviceInfo());
         attendanceRepository.logAudit(student.studentId, adminUserId, sessionId, token, "SUCCESS", request.getDeviceInfo(), ipAddress, "Marked present via QR scanner");
 
-        String timeStr = TIME_FORMATTER.format(LocalTime.now());
-        String dateStr = LocalDate.now().toString();
-        String sessionTitle = "Classroom Session - " + dateStr;
-
         // 7. Real-time email notification to that particular student
-        String targetEmail = (student.email != null && !student.email.trim().isEmpty() && !student.email.contains("@skillportal.com"))
-                ? student.email.trim()
-                : (emailService != null ? emailService.getDefaultStudentEmail() : "diggaviprajwal55@gmail.com");
-
         if (emailService != null) {
             emailService.sendAttendanceMarkedEmail(
                     targetEmail,

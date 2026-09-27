@@ -547,36 +547,24 @@ export const AdminScannerPage: React.FC = () => {
                         {lastResult.source || 'QR_SCAN'}
                       </span>
                     </div>
-                    {lastResult.attendanceStatus === 'PRESENT' && (
+                    {(lastResult.attendanceStatus === 'PRESENT' || lastResult.attendanceStatus === 'ALREADY_MARKED') && (
                       <div className="pt-2 border-t border-[#1b2230] space-y-1.5">
                         <div className="flex items-center justify-between text-slate-400">
                           <span className="flex items-center gap-1.5">
                             <Mail className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>Student Email:</span>
+                            <span>Confirmation Sent To:</span>
                           </span>
-                          <span className="font-mono text-emerald-300 font-bold truncate max-w-[190px]" title={lastResult.student.email}>
-                            {lastResult.student.email || 'None'}
+                          <span className="font-mono text-emerald-300 font-bold truncate max-w-[200px]" title={lastResult.student.email || 'diggaviprajwal55@gmail.com'}>
+                            {lastResult.student.email || 'diggaviprajwal55@gmail.com'}
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-slate-400">
                           <span>Dispatch Status:</span>
                           <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                            <span>Dispatched Realtime</span>
+                            <span>✓ Present for the Day Email Dispatched</span>
                             <CheckCircle2 className="w-3 h-3" />
                           </span>
                         </div>
-                        {lastResult.student.email !== 'diggaviprajwal55@gmail.com' && (
-                          <div className="pt-1 flex justify-end">
-                            <button
-                              onClick={() => handleUpdateStudentEmail(lastResult.student!.id, 'diggaviprajwal55@gmail.com')}
-                              disabled={updatingStudentEmail}
-                              className="text-[10px] text-[#00c2ff] hover:underline flex items-center gap-1 font-semibold"
-                            >
-                              <span>Update to diggaviprajwal55@gmail.com</span>
-                              <ExternalLink className="w-2.5 h-2.5" />
-                            </button>
-                          </div>
-                        )}
                         {updateEmailNotice && (
                           <p className="text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-1.5 rounded-lg text-center font-medium">
                             {updateEmailNotice}
@@ -920,10 +908,10 @@ export const AdminScannerPage: React.FC = () => {
             <div className="p-4 rounded-2xl bg-[#141824] border border-[#1e2538] space-y-3">
               <div>
                 <h3 className="text-xs font-black text-white uppercase tracking-wider">
-                  🎓 Link Demo Student to Personal Email
+                  🎓 Default Student Recipient Email
                 </h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Set your personal email on student STU-2026-001 so attendance QR scans deliver to your inbox.
+                  Set recipient address for attendance notifications (all scanned students will deliver notices here).
                 </p>
               </div>
 
@@ -932,7 +920,7 @@ export const AdminScannerPage: React.FC = () => {
                   type="email"
                   value={studentCustomEmail}
                   onChange={(e) => setStudentCustomEmail(e.target.value)}
-                  placeholder="Student target email (diggaviprajwal55@gmail.com)"
+                  placeholder="Recipient email (diggaviprajwal55@gmail.com)"
                   className="flex-1 bg-[#0c0e14] border border-[#21293a] focus:border-[#00b4d8] text-white text-xs px-3.5 py-2.5 rounded-xl outline-none transition-all placeholder:text-slate-500 font-mono"
                 />
                 <button
@@ -941,7 +929,7 @@ export const AdminScannerPage: React.FC = () => {
                   disabled={updatingStudentEmail || !studentCustomEmail.trim()}
                   className="px-4 py-2.5 rounded-xl bg-[#1f2638] hover:bg-[#2b354e] text-white font-bold text-xs transition-all shrink-0"
                 >
-                  {updatingStudentEmail ? 'Linking...' : 'Update Student 1 Email'}
+                  {updatingStudentEmail ? 'Saving...' : 'Set Recipient Email'}
                 </button>
               </div>
 

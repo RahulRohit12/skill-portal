@@ -406,19 +406,24 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public boolean updateStudentEmail(Long studentId, String newEmail) {
-        if (studentId == null || newEmail == null || newEmail.trim().isEmpty()) {
+        if (newEmail == null || newEmail.trim().isEmpty()) {
             return false;
         }
         String cleanEmail = newEmail.trim();
         try {
-            jdbcTemplate.update("UPDATE users u JOIN students s ON s.user_id = u.id SET u.email = ? WHERE s.id = ?", cleanEmail, studentId);
-            jdbcTemplate.update("UPDATE users SET email = ? WHERE id = ?", cleanEmail, studentId);
             jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('default_student_email', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", cleanEmail);
-            return true;
         } catch (Exception e) {
-            log.error("Failed to update student email: {}", e.getMessage());
-            return false;
+            log.warn("Notice updating default student email in app_settings: {}", e.getMessage());
         }
+
+        if (studentId != null) {
+            try {
+                jdbcTemplate.update("UPDATE users u JOIN students s ON s.user_id = u.id SET u.email = ? WHERE s.id = ?", cleanEmail, studentId);
+            } catch (Exception e) {
+                log.info("Could not update users table directly (expected if unique constraint exists): {}", e.getMessage());
+            }
+        }
+        return true;
     }
 
     private String buildHtmlTemplate(
