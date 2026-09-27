@@ -21,6 +21,8 @@ import { useAuth } from '../context/AuthContext';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { StudentQrModal } from '../components/attendance/StudentQrModal';
 import { DashboardAttendanceMatrix } from '../components/attendance/DashboardAttendanceMatrix';
+import { PracticeStreak } from '../components/dashboard/PracticeStreak';
+
 
 interface LeaderboardItem {
   rank: number;
@@ -359,7 +361,14 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 2: Classroom Attendance Matrix (Replaces Practice Streak) */}
+          {/* Card 2: Practice Streak Heatmap (Matching Image 1) */}
+          <PracticeStreak
+            initialCurrentStreak={8}
+            initialLongestStreak={8}
+            initialTotalSubmissions={495}
+          />
+
+          {/* Card 3: Classroom Attendance Matrix */}
           <DashboardAttendanceMatrix onOpenQrModal={() => setShowQrModal(true)} />
 
           {/* Bottom Sub-Cards: Placement Drives & Skills Acquired */}
