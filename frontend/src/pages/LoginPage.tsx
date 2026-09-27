@@ -8,7 +8,6 @@ import {
   ShieldCheck,
   Sparkles,
   Lock,
-  GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -71,7 +70,7 @@ export const LoginPage: React.FC = () => {
       <div className="absolute bottom-0 right-1/4 -mb-24 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[160px] pointer-events-none" />
 
       {/* Top Header Branding: Big SKILLEX ACADEMY Name + Graduation Cap with X Logo */}
-      <header className="relative z-10 max-w-4xl mx-auto w-full text-center py-2 sm:py-4">
+      <header className="relative z-10 max-w-5xl mx-auto w-full text-center py-2 sm:py-4">
         {/* Academic Mortarboard with Cyber 'X' Emblem (No electric symbol) */}
         <div className="inline-flex relative mb-3 group">
           <div className="absolute -inset-2 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-3xl blur-xl opacity-60 group-hover:opacity-90 transition-opacity" />
@@ -114,12 +113,12 @@ export const LoginPage: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Container: Login Card on Left, Student Boy on Right (Matching Image Layout) */}
-      <main className="relative z-10 max-w-4xl mx-auto w-full my-auto py-4 sm:py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
+      {/* Main Container: Login Card on Left, Bigger Student Boy with Tech Logos on Right */}
+      <main className="relative z-10 max-w-5xl mx-auto w-full my-auto py-4 sm:py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
           
-          {/* LEFT: Clean Login Card (7 Cols) */}
-          <div className="lg:col-span-7">
+          {/* LEFT: Clean Login Card (6.5 Cols) */}
+          <div className="lg:col-span-6">
             <div className="relative">
               <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/20 via-sky-500/15 to-blue-600/20 rounded-3xl blur-xl opacity-75 pointer-events-none" />
 
@@ -287,90 +286,92 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          {/* RIGHT: Student Boy Standing Beside the Card (Transparent PNG from getmaterials) */}
-          <div className="lg:col-span-5 flex items-center justify-center relative">
-            <div className="relative w-full max-w-[280px] sm:max-w-[340px] flex items-center justify-center">
-              {/* Ambient Glow */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/20 via-sky-500/15 to-blue-600/20 rounded-full blur-3xl opacity-75 pointer-events-none" />
+          {/* RIGHT: Bigger Student Boy + Tech Logos at the Bottom of Student Image (6 Cols) */}
+          <div className="lg:col-span-6 flex flex-col items-center justify-center relative space-y-4">
+            
+            {/* Bigger 3D Student Boy Image */}
+            <div className="relative w-full max-w-[380px] sm:max-w-[440px] lg:max-w-[460px] flex items-center justify-center">
+              {/* Cyan / Blue Backlight Glow */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/25 via-sky-500/20 to-blue-600/25 rounded-full blur-3xl opacity-80 pointer-events-none" />
               
               <img
                 src="/student5.png"
                 alt="SkillX Academy Student"
-                className="relative z-10 w-full h-auto max-h-[460px] object-contain drop-shadow-[0_20px_40px_rgba(0,194,255,0.25)] hover:scale-105 transition-transform duration-300 pointer-events-none select-none"
+                className="relative z-10 w-full h-auto max-h-[500px] sm:max-h-[540px] object-contain drop-shadow-[0_25px_50px_rgba(0,194,255,0.3)] hover:scale-[1.03] transition-transform duration-300 pointer-events-none select-none"
                 loading="eager"
               />
             </div>
+
+            {/* Tech Stack Logos placed directly at the bottom of student image */}
+            <div className="w-full max-w-[460px] flex items-center justify-center gap-2 sm:gap-2.5 flex-wrap pt-1 z-10">
+              {/* Java */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0e1320]/90 border border-orange-500/40 text-xs font-bold text-slate-200 shadow-md hover:border-orange-500/70 hover:scale-105 transition-all">
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none">
+                  <path d="M4 19c4.5 1.5 11.5 1.5 16 0M6 22c3.5 1 8.5 1 12 0" stroke="#f97316" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M8.5 14.5c2.5.5 5.5.5 8 0 0 0 1-1.5 0-3s-3.5-1-4-2c-.5-1 .5-2 1-3-1.5 0-3 1.5-3 3s2.5 2 2.5 3c0 .5-.5 1-1.5 1.5-1 .5-2 0-3-.5" stroke="#ea580c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M11 2.5c1 .8 1.5 2 1 3M14 2c1.2 1 1.8 2.2 1.2 3.5" stroke="#fb923c" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+                <span>Java</span>
+              </div>
+
+              {/* Python */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0e1320]/90 border border-yellow-500/40 text-xs font-bold text-slate-200 shadow-md hover:border-yellow-500/70 hover:scale-105 transition-all">
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path fill="#38bdf8" d="M11.9 2c-3.1 0-5 .6-5 2.5V7h5.1c1.3 0 2.4 1.1 2.4 2.4v1.7h1.7c1.9 0 3.3-1.4 3.3-3.3V5.4C19.4 3.5 17.6 2 15 2h-3.1zm-1.8 1.8c.5 0 .9.4.9.9s-.4.9-.9.9-.9-.4-.9-.9.4-.9.9-.9z" />
+                  <path fill="#facc15" d="M12.1 22c3.1 0 5-.6 5-2.5V17H12c-1.3 0-2.4-1.1-2.4-2.4v-1.7H7.9C6 12.9 4.6 14.3 4.6 16.2v2.4C4.6 20.5 6.4 22 9 22h3.1zm1.8-1.8c-.5 0-.9-.4-.9-.9s.4-.9.9-.9.9.4.9.9-.4.9-.9.9z" />
+                </svg>
+                <span>Python</span>
+              </div>
+
+              {/* SQL */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0e1320]/90 border border-cyan-500/40 text-xs font-bold text-slate-200 shadow-md hover:border-cyan-500/70 hover:scale-105 transition-all">
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="#00c2ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <ellipse cx="12" cy="5" rx="9" ry="3" />
+                  <path d="M3 5V12C3 13.66 7.03 15 12 15C16.97 15 21 13.66 21 12V5" />
+                  <path d="M3 12V19C3 20.66 7.03 22 12 22C16.97 22 21 20.66 21 19V12" />
+                </svg>
+                <span>MySQL</span>
+              </div>
+
+              {/* Data Structures */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0e1320]/90 border border-emerald-500/40 text-xs font-bold text-slate-200 shadow-md hover:border-emerald-500/70 hover:scale-105 transition-all">
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="4" r="2.5" fill="#10b981" />
+                  <circle cx="6" cy="12" r="2.5" fill="#10b981" />
+                  <circle cx="18" cy="12" r="2.5" fill="#10b981" />
+                  <path d="M10.5 5.5L7.5 10.5M13.5 5.5L16.5 10.5" stroke="#34d399" strokeWidth="2" />
+                </svg>
+                <span>DSA</span>
+              </div>
+
+              {/* Spring Boot */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0e1320]/90 border border-green-500/40 text-xs font-bold text-slate-200 shadow-md hover:border-green-500/70 hover:scale-105 transition-all">
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" fill="#22c55e" fillOpacity="0.25" stroke="#22c55e" strokeWidth="1.8" />
+                  <path d="M12 6c-3 0-5 2.5-5 5.5 0 2.5 2 4.5 5 6.5 3-2 5-4 5-6.5 0-3-2-5.5-5-5.5z" fill="#4ade80" />
+                </svg>
+                <span>Spring</span>
+              </div>
+
+              {/* HTML5 */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0e1320]/90 border border-red-500/40 text-xs font-bold text-slate-200 shadow-md hover:border-red-500/70 hover:scale-105 transition-all">
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none">
+                  <path d="M4 3l1.8 17.5L12 22l6.2-1.5L20 3H4z" fill="#e34f26" fillOpacity="0.25" stroke="#f97316" strokeWidth="1.8" />
+                  <path d="M8 8h8M8 12h7.5l-.5 4.5L12 17.5l-3-.9-.2-2" stroke="#ea580c" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span>HTML5</span>
+              </div>
+            </div>
+
           </div>
 
         </div>
       </main>
 
-      {/* Tech Stack Logos Bar: Java, Python, SQL, DSA, Spring Boot, HTML5 */}
-      <footer className="relative z-10 max-w-4xl mx-auto w-full pt-4 pb-2 border-t border-[#141824] flex flex-col sm:flex-row items-center justify-between gap-4">
-        <span className="text-xs text-slate-500 text-center sm:text-left">
-          &copy; {new Date().getFullYear()} SKILLEX ACADEMY &bull; All rights reserved.
-        </span>
-
-        {/* Clean Tech Logos (Java, Python, SQL, Data Structures, Spring, HTML) */}
-        <div className="flex items-center justify-center gap-2 flex-wrap">
-          {/* Java */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1320] border border-orange-500/30 text-[11px] font-bold text-slate-200 shadow-sm" title="Java Enterprise">
-            <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none">
-              <path d="M4 19c4.5 1.5 11.5 1.5 16 0M6 22c3.5 1 8.5 1 12 0" stroke="#f97316" strokeWidth="2" strokeLinecap="round" />
-              <path d="M8.5 14.5c2.5.5 5.5.5 8 0 0 0 1-1.5 0-3s-3.5-1-4-2c-.5-1 .5-2 1-3-1.5 0-3 1.5-3 3s2.5 2 2.5 3c0 .5-.5 1-1.5 1.5-1 .5-2 0-3-.5" stroke="#ea580c" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M11 2.5c1 .8 1.5 2 1 3M14 2c1.2 1 1.8 2.2 1.2 3.5" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            <span>Java</span>
-          </div>
-
-          {/* Python */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1320] border border-yellow-500/30 text-[11px] font-bold text-slate-200 shadow-sm" title="Python Mastery">
-            <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-              <path fill="#38bdf8" d="M11.9 2c-3.1 0-5 .6-5 2.5V7h5.1c1.3 0 2.4 1.1 2.4 2.4v1.7h1.7c1.9 0 3.3-1.4 3.3-3.3V5.4C19.4 3.5 17.6 2 15 2h-3.1zm-1.8 1.8c.5 0 .9.4.9.9s-.4.9-.9.9-.9-.4-.9-.9.4-.9.9-.9z" />
-              <path fill="#facc15" d="M12.1 22c3.1 0 5-.6 5-2.5V17H12c-1.3 0-2.4-1.1-2.4-2.4v-1.7H7.9C6 12.9 4.6 14.3 4.6 16.2v2.4C4.6 20.5 6.4 22 9 22h3.1zm1.8-1.8c-.5 0-.9-.4-.9-.9s.4-.9.9-.9.9.4.9.9-.4.9-.9.9z" />
-            </svg>
-            <span>Python</span>
-          </div>
-
-          {/* SQL */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1320] border border-cyan-500/30 text-[11px] font-bold text-slate-200 shadow-sm" title="MySQL Database">
-            <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="#00c2ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <ellipse cx="12" cy="5" rx="9" ry="3" />
-              <path d="M3 5V12C3 13.66 7.03 15 12 15C16.97 15 21 13.66 21 12V5" />
-              <path d="M3 12V19C3 20.66 7.03 22 12 22C16.97 22 21 20.66 21 19V12" />
-            </svg>
-            <span>SQL</span>
-          </div>
-
-          {/* Data Structures */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1320] border border-emerald-500/30 text-[11px] font-bold text-slate-200 shadow-sm" title="Data Structures & Algorithms">
-            <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="4" r="2.5" fill="#10b981" />
-              <circle cx="6" cy="12" r="2.5" fill="#10b981" />
-              <circle cx="18" cy="12" r="2.5" fill="#10b981" />
-              <path d="M10.5 5.5L7.5 10.5M13.5 5.5L16.5 10.5" stroke="#34d399" strokeWidth="1.5" />
-            </svg>
-            <span>DSA</span>
-          </div>
-
-          {/* Spring Boot */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1320] border border-green-500/30 text-[11px] font-bold text-slate-200 shadow-sm" title="Spring Boot Microservices">
-            <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" fill="#22c55e" fillOpacity="0.2" stroke="#22c55e" strokeWidth="1.5" />
-              <path d="M12 6c-3 0-5 2.5-5 5.5 0 2.5 2 4.5 5 6.5 3-2 5-4 5-6.5 0-3-2-5.5-5-5.5z" fill="#4ade80" />
-            </svg>
-            <span>Spring</span>
-          </div>
-
-          {/* HTML5 */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1320] border border-red-500/30 text-[11px] font-bold text-slate-200 shadow-sm" title="HTML5 & Web">
-            <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none">
-              <path d="M4 3l1.8 17.5L12 22l6.2-1.5L20 3H4z" fill="#e34f26" fillOpacity="0.2" stroke="#f97316" strokeWidth="1.5" />
-              <path d="M8 8h8M8 12h7.5l-.5 4.5L12 17.5l-3-.9-.2-2" stroke="#ea580c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span>HTML</span>
-          </div>
-        </div>
+      {/* Simple Clean Footer */}
+      <footer className="relative z-10 max-w-5xl mx-auto w-full py-3 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-[#121722]/80">
+        <span>&copy; {new Date().getFullYear()} SKILLEX ACADEMY &bull; All rights reserved.</span>
+        <span className="text-[11px] text-slate-500">Enterprise Secure Authentication &bull; AES-256</span>
       </footer>
     </div>
   );
