@@ -264,4 +264,50 @@ public class EnrollmentService {
     public List<EnrollmentDto.EnrollmentAdminItem> listEnrollmentsForAdmin(String search, String status, Long batchId) {
         return enrollmentRepository.findAllForAdmin(search, status, batchId);
     }
+
+    @Transactional
+    public Map<String, Object> updateCredentials(String token, EnrollmentDto.UpdateCredentialsRequest req) {
+        EnrollmentRepository.EnrollmentRecord record = enrollmentRepository.findByToken(token)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment record not found."));
+
+        if (!"COMPLETED".equals(record.enrollmentStatus) || record.studentUserId == null) {
+            throw new BadRequestException("Credentials can only be updated after payment is verified.");
+        }
+
+        String newEmail = null;
+        if (req.getEmail() != null && !req.getEmail().isBlank()) {
+            String cleanEmail = req.getEmail().trim().toLowerCase();
+            if (!cleanEmail.matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,6}$")) {
+                throw new BadRequestException("Please enter a valid Gmail / email address.");
+            }
+            Long existingUserId = enrollmentRepository.findUserIdByEmail(cleanEmail);
+            if (existingUserId != null && !existingUserId.equals(record.studentUserId)) {
+                throw new BadRequestException("This Gmail / email address is already registered to another account.");
+            }
+            newEmail = cleanEmail;
+        }
+
+        String passwordHash = null;
+        if (req.getPassword() != null && !req.getPassword().isBlank()) {
+            if (req.getPassword().trim().length() < 6) {
+                throw new BadRequestException("Password must be at least 6 characters long.");
+            }
+            passwordHash = passwordEncoder.encode(req.getPassword().trim());
+        }
+
+        if (newEmail == null && passwordHash == null) {
+            throw new BadRequestException("Please provide a valid Gmail or password to update.");
+        }
+
+        enrollmentRepository.updateStudentCredentials(record.studentUserId, token, newEmail, passwordHash);
+
+        log.info("Student credentials updated for userId: {}, token: {}", record.studentUserId, token);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("success", true);
+        res.put("message", "Login credentials updated successfully.");
+        res.put("email", newEmail != null ? newEmail : record.email);
+        res.put("userId", record.studentUserId);
+        return res;
+    }
 }

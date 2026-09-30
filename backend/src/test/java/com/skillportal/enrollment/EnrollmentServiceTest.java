@@ -205,4 +205,76 @@ public class EnrollmentServiceTest {
         jdbcTemplate.update("DELETE FROM students WHERE id = ?", studentId);
         jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
     }
+
+    @Test
+    @DisplayName("Post-payment credentials update: student can edit their Gmail and password after verified payment")
+    void testUpdateCredentialsAfterPayment() {
+        String testEmail = "original_student_" + System.currentTimeMillis() + "@skillportal.test";
+        String updatedEmail = "updated_gmail_" + System.currentTimeMillis() + "@gmail.com";
+        String testStudentId = "STU-EDIT-" + (System.currentTimeMillis() % 100000);
+        Long batchId = getValidBatchId();
+        Long courseId = getValidCourseId();
+
+        EnrollmentDto.AdminEnrollmentGenerateRequest request = new EnrollmentDto.AdminEnrollmentGenerateRequest();
+        request.setFullName("Kiran Kumar");
+        request.setEmail(testEmail);
+        request.setStudentIdNumber(testStudentId);
+        request.setBatchId(batchId);
+        request.setCourseId(courseId);
+        request.setAmountInRupees(4999.0);
+
+        EnrollmentDto.EnrollmentGenerateResponse genRes = enrollmentService.generateEnrollment(request, 1L);
+        String token = genRes.getEnrollmentToken();
+
+        // Check 1: Cannot update credentials BEFORE payment
+        EnrollmentDto.UpdateCredentialsRequest updateReq = new EnrollmentDto.UpdateCredentialsRequest();
+        updateReq.setEmail(updatedEmail);
+        updateReq.setPassword("NewSecurePass999!");
+
+        assertThrows(BadRequestException.class, () -> {
+            enrollmentService.updateCredentials(token, updateReq);
+        }, "Updating credentials before payment MUST be rejected!");
+
+        // Pay and activate
+        EnrollmentDto.RazorpayOrderCreateResponse order = enrollmentService.createRazorpayOrder(token);
+        String paymentId = "pay_test_edit_" + System.currentTimeMillis();
+        String validSig = razorpayService.generateTestSignature(order.getOrderId(), paymentId);
+
+        EnrollmentDto.PaymentVerificationRequest verifyReq = new EnrollmentDto.PaymentVerificationRequest();
+        verifyReq.setRazorpayOrderId(order.getOrderId());
+        verifyReq.setRazorpayPaymentId(paymentId);
+        verifyReq.setRazorpaySignature(validSig);
+
+        Map<String, Object> verifyRes = enrollmentService.verifyPaymentAndActivate(token, verifyReq);
+        Long userId = ((Number) verifyRes.get("userId")).longValue();
+
+        // Check 2: Update credentials after successful payment
+        Map<String, Object> updateResult = enrollmentService.updateCredentials(token, updateReq);
+        assertNotNull(updateResult);
+        assertEquals(true, updateResult.get("success"));
+        assertEquals(updatedEmail, updateResult.get("email"));
+
+        // Check 3: Database reflects updated email
+        String dbEmail = jdbcTemplate.queryForObject(
+                "SELECT email FROM users WHERE id = ?",
+                String.class,
+                userId
+        );
+        assertEquals(updatedEmail, dbEmail);
+
+        // Check 4: student_enrollments also reflects updated email
+        String enrDbEmail = jdbcTemplate.queryForObject(
+                "SELECT email FROM student_enrollments WHERE enrollment_token = ?",
+                String.class,
+                token
+        );
+        assertEquals(updatedEmail, enrDbEmail);
+
+        // Cleanup
+        jdbcTemplate.update("DELETE FROM notifications WHERE user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM enrollments WHERE student_id IN (SELECT id FROM students WHERE user_id = ?)", userId);
+        jdbcTemplate.update("DELETE FROM student_enrollments WHERE enrollment_token = ?", token);
+        jdbcTemplate.update("DELETE FROM students WHERE user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
+    }
 }

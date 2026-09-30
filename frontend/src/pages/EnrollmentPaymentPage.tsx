@@ -21,7 +21,10 @@ import {
   Check,
   QrCode,
   Smartphone,
-  Building2
+  Building2,
+  Edit3,
+  Copy,
+  Key,
 } from 'lucide-react';
 import api from '../api/client';
 import { StudentEnrollmentDetailResponse, RazorpayOrderCreateResponse } from '../types';
@@ -47,6 +50,18 @@ export const EnrollmentPaymentPage: React.FC = () => {
   const [sandboxOrderData, setSandboxOrderData] = useState<RazorpayOrderCreateResponse | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
 
+  // Credential editing states on post-payment success screen
+  const [isEditingCredentials, setIsEditingCredentials] = useState<boolean>(false);
+  const [editEmail, setEditEmail] = useState<string>('');
+  const [editPassword, setEditPassword] = useState<string>('');
+  const [editConfirmPassword, setEditConfirmPassword] = useState<string>('');
+  const [showEditPassword, setShowEditPassword] = useState<boolean>(false);
+  const [updatingCredentials, setUpdatingCredentials] = useState<boolean>(false);
+  const [credentialUpdateSuccess, setCredentialUpdateSuccess] = useState<string | null>(null);
+  const [credentialUpdateError, setCredentialUpdateError] = useState<string | null>(null);
+  const [copiedEmail, setCopiedEmail] = useState<boolean>(false);
+  const [copiedPassword, setCopiedPassword] = useState<boolean>(false);
+
   useEffect(() => {
     if (!token) {
       setError('Invalid enrollment token.');
@@ -59,7 +74,11 @@ export const EnrollmentPaymentPage: React.FC = () => {
       setError(null);
       try {
         const res = await api.get(`/enrollment/details/${token}`);
-        setDetails(res.data?.data || null);
+        const data = res.data?.data || null;
+        setDetails(data);
+        if (data?.email) {
+          setEditEmail(data.email);
+        }
       } catch (err: any) {
         console.error('Failed to load enrollment details', err);
         setError(err.response?.data?.message || 'Enrollment link is invalid, expired, or already used.');
@@ -244,7 +263,11 @@ export const EnrollmentPaymentPage: React.FC = () => {
       };
 
       const res = await api.post(`/enrollment/verify-payment/${token}`, payload);
-      setPaymentSuccess(res.data?.data || { success: true });
+      const successData = res.data?.data || { success: true };
+      setPaymentSuccess(successData);
+      if (successData.email) {
+        setEditEmail(successData.email);
+      }
     } catch (err: any) {
       console.error('Payment verification failed', err);
       setPaymentFailedMsg(
@@ -253,6 +276,58 @@ export const EnrollmentPaymentPage: React.FC = () => {
       );
     } finally {
       setVerifying(false);
+    }
+  };
+
+  // Student edits their Gmail & Password after successful payment
+  const handleUpdateCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCredentialUpdateError(null);
+    setCredentialUpdateSuccess(null);
+
+    const emailToUpdate = editEmail.trim().toLowerCase();
+    if (!emailToUpdate || !emailToUpdate.includes('@') || !emailToUpdate.includes('.')) {
+      setCredentialUpdateError('Please enter a valid Gmail / email address.');
+      return;
+    }
+
+    if (editPassword) {
+      if (editPassword.trim().length < 6) {
+        setCredentialUpdateError('Password must be at least 6 characters long.');
+        return;
+      }
+      if (editPassword !== editConfirmPassword) {
+        setCredentialUpdateError('Passwords do not match. Please re-enter.');
+        return;
+      }
+    }
+
+    setUpdatingCredentials(true);
+    try {
+      const res = await api.post(`/enrollment/update-credentials/${token}`, {
+        email: emailToUpdate,
+        password: editPassword.trim() || undefined,
+      });
+
+      const updatedEmail = res.data?.data?.email || emailToUpdate;
+      if (details) {
+        setDetails({ ...details, email: updatedEmail });
+      }
+      if (paymentSuccess) {
+        setPaymentSuccess({ ...paymentSuccess, email: updatedEmail });
+      }
+      if (editPassword.trim()) {
+        setPassword(editPassword.trim());
+      }
+      setCredentialUpdateSuccess('Gmail & password updated successfully! You can now log in with these credentials.');
+      setIsEditingCredentials(false);
+      setEditPassword('');
+      setEditConfirmPassword('');
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Failed to update credentials. Please try again.';
+      setCredentialUpdateError(msg);
+    } finally {
+      setUpdatingCredentials(false);
     }
   };
 
@@ -351,9 +426,208 @@ export const EnrollmentPaymentPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Student Login Credentials & Edit Section */}
+            <div className="p-5 rounded-2xl bg-slate-950/90 border border-cyan-500/30 text-left text-xs space-y-3.5 shadow-lg shadow-cyan-500/5">
+              <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+                    <Key className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-white text-xs">Student Portal Credentials</h3>
+                    <p className="text-[10px] text-slate-400">Use this Gmail & Password to access your portal</p>
+                  </div>
+                </div>
+                {!isEditingCredentials && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditingCredentials(true);
+                      setEditEmail(details?.email || paymentSuccess?.email || '');
+                      setEditPassword('');
+                      setEditConfirmPassword('');
+                      setCredentialUpdateError(null);
+                      setCredentialUpdateSuccess(null);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[11px] font-bold transition-all"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit Gmail & Password</span>
+                  </button>
+                )}
+              </div>
+
+              {credentialUpdateSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{credentialUpdateSuccess}</span>
+                </div>
+              )}
+
+              {!isEditingCredentials ? (
+                /* READ-ONLY DISPLAY OF CREDENTIALS */
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Login Gmail / Email
+                      </span>
+                      <span className="font-mono font-bold text-white text-xs">
+                        {details?.email || paymentSuccess?.email || editEmail}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const emailToCopy = details?.email || paymentSuccess?.email || editEmail;
+                        navigator.clipboard.writeText(emailToCopy);
+                        setCopiedEmail(true);
+                        setTimeout(() => setCopiedEmail(false), 2000);
+                      }}
+                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                      title="Copy Gmail"
+                    >
+                      {copiedEmail ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Portal Password
+                      </span>
+                      <span className="font-mono font-bold text-white text-xs">
+                        {password ? password : '•••••••• (Set by you / academy default)'}
+                      </span>
+                    </div>
+                    {password && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(password);
+                          setCopiedPassword(true);
+                          setTimeout(() => setCopiedPassword(false), 2000);
+                        }}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                        title="Copy Password"
+                      >
+                        {copiedPassword ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* INLINE EDIT FORM FOR GMAIL & PASSWORD */
+                <form onSubmit={handleUpdateCredentials} className="space-y-3 pt-1">
+                  {credentialUpdateError && (
+                    <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                      <span>{credentialUpdateError}</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-300">
+                      Gmail / Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                      <input
+                        type="email"
+                        required
+                        value={editEmail}
+                        onChange={(e) => setEditEmail(e.target.value)}
+                        placeholder="yourname@gmail.com"
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs outline-none focus:ring-2 focus:ring-cyan-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-300">
+                        New Password (min 6 chars)
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                        <input
+                          type={showEditPassword ? 'text' : 'password'}
+                          value={editPassword}
+                          onChange={(e) => setEditPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs outline-none focus:ring-2 focus:ring-cyan-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowEditPassword(!showEditPassword)}
+                          className="p-1 text-slate-400 hover:text-white absolute right-2.5 top-2"
+                        >
+                          {showEditPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-300">
+                        Confirm Password
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                        <input
+                          type={showEditPassword ? 'text' : 'password'}
+                          value={editConfirmPassword}
+                          onChange={(e) => setEditConfirmPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs outline-none focus:ring-2 focus:ring-cyan-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="submit"
+                      disabled={updatingCredentials}
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      {updatingCredentials ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <span>Save Credentials</span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updatingCredentials}
+                      onClick={() => {
+                        setIsEditingCredentials(false);
+                        setEditEmail(details?.email || paymentSuccess?.email || '');
+                        setEditPassword('');
+                        setEditConfirmPassword('');
+                        setCredentialUpdateError(null);
+                      }}
+                      className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+
             <div className="pt-2">
               <button
-                onClick={() => navigate('/login')}
+                onClick={() =>
+                  navigate('/login', {
+                    state: {
+                      email: details?.email || paymentSuccess?.email || editEmail,
+                      password: password || editPassword || undefined,
+                    },
+                  })
+                }
                 className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-sm tracking-wide transition-all shadow-xl shadow-cyan-500/25 flex items-center justify-center gap-2 group"
               >
                 <span>Proceed to Student Portal Login</span>

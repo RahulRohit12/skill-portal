@@ -217,6 +217,28 @@ public class EnrollmentRepository {
         return userId;
     }
 
+    public Long findUserIdByEmail(String email) {
+        try {
+            return jdbcTemplate.queryForObject("SELECT id FROM users WHERE LOWER(email) = LOWER(?)",
+                    Long.class, email.trim().toLowerCase());
+        } catch (EmptyResultDataAccessException e) {
+            return null;
+        }
+    }
+
+    @Transactional
+    public void updateStudentCredentials(Long userId, String token, String email, String passwordHash) {
+        if (email != null && !email.isBlank()) {
+            String cleanEmail = email.trim().toLowerCase();
+            jdbcTemplate.update("UPDATE users SET email = ? WHERE id = ?", cleanEmail, userId);
+            jdbcTemplate.update("UPDATE student_enrollments SET email = ? WHERE enrollment_token = ?", cleanEmail, token);
+        }
+        if (passwordHash != null && !passwordHash.isBlank()) {
+            jdbcTemplate.update("UPDATE users SET password_hash = ? WHERE id = ?", passwordHash, userId);
+            jdbcTemplate.update("UPDATE student_enrollments SET password_hash = ? WHERE enrollment_token = ?", passwordHash, token);
+        }
+    }
+
     public List<EnrollmentDto.EnrollmentAdminItem> findAllForAdmin(String search, String status, Long batchId) {
         StringBuilder sql = new StringBuilder(
                 "SELECT e.*, b.name AS batch_name, c.title AS course_title " +

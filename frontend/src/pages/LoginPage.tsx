@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Eye,
   EyeOff,
@@ -14,10 +14,12 @@ import { useAuth } from '../context/AuthContext';
 export const LoginPage: React.FC = () => {
   const { loginStudent, loginAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as { email?: string; password?: string } | null;
 
   const [isAdminTab, setIsAdminTab] = useState(false);
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
+  const [identifier, setIdentifier] = useState(locationState?.email || '');
+  const [password, setPassword] = useState(locationState?.password || '');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);

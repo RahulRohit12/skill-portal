@@ -65,4 +65,13 @@ public class EnrollmentController {
         String sig = razorpayService.generateTestSignature(orderId, paymentId);
         return ResponseEntity.ok(ApiResponse.success(Map.of("signature", sig)));
     }
+
+    @PostMapping("/update-credentials/{token}")
+    @Operation(summary = "Allow student to edit Gmail and password after successful payment")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateCredentials(
+            @PathVariable String token,
+            @RequestBody EnrollmentDto.UpdateCredentialsRequest req) {
+        Map<String, Object> result = enrollmentService.updateCredentials(token, req);
+        return ResponseEntity.ok(ApiResponse.success("Login credentials updated successfully", result));
+    }
 }
