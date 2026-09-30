@@ -11,6 +11,16 @@ public interface EmailService {
             String sessionTitle
     );
 
+    void sendEnrollmentPaymentEmail(
+            String recipientEmail,
+            String studentName,
+            String studentIdNumber,
+            String courseTitle,
+            String batchName,
+            Double amountInRupees,
+            String paymentUrl
+    );
+
     EmailDto.EmailDiagnosticDto getEmailStatus();
 
     EmailDto.EmailTestResult sendTestEmail(String recipientEmail);

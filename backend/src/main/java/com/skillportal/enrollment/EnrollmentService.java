@@ -18,13 +18,19 @@ public class EnrollmentService {
     private final EnrollmentRepository enrollmentRepository;
     private final RazorpayService razorpayService;
     private final PasswordEncoder passwordEncoder;
+    private final com.skillportal.email.EmailService emailService;
+
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.url:https://skill-portal-1-mn1n.onrender.com}")
+    private String frontendUrl;
 
     public EnrollmentService(EnrollmentRepository enrollmentRepository,
                              RazorpayService razorpayService,
-                             PasswordEncoder passwordEncoder) {
+                             PasswordEncoder passwordEncoder,
+                             com.skillportal.email.EmailService emailService) {
         this.enrollmentRepository = enrollmentRepository;
         this.razorpayService = razorpayService;
         this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
     }
 
     /**
@@ -81,6 +87,23 @@ public class EnrollmentService {
             resp.setBatchName(record.batchName);
             resp.setCourseTitle(record.courseTitle);
         });
+
+        // Automatically dispatch official enrollment payment form to student's Gmail
+        String fullPaymentUrl = (frontendUrl.endsWith("/") ? frontendUrl.substring(0, frontendUrl.length() - 1) : frontendUrl) + "/enroll/" + token;
+        try {
+            emailService.sendEnrollmentPaymentEmail(
+                    req.getEmail().trim().toLowerCase(),
+                    req.getFullName().trim(),
+                    req.getStudentIdNumber(),
+                    resp.getCourseTitle(),
+                    resp.getBatchName(),
+                    resp.getAmountInRupees(),
+                    fullPaymentUrl
+            );
+            log.info("Auto-dispatched enrollment payment email to student {}", req.getEmail());
+        } catch (Exception ex) {
+            log.warn("Auto-dispatch email failed for {}: {}", req.getEmail(), ex.getMessage());
+        }
 
         log.info("Admin {} generated enrollment token {} for student {}", adminId, token, req.getEmail());
         return resp;
@@ -309,5 +332,87 @@ public class EnrollmentService {
         res.put("email", newEmail != null ? newEmail : record.email);
         res.put("userId", record.studentUserId);
         return res;
+    }
+
+    /**
+     * Explicitly send / re-send the official payment form link to student's Gmail.
+     */
+    public Map<String, Object> sendEnrollmentEmail(String token) {
+        EnrollmentRepository.EnrollmentRecord record = enrollmentRepository.findByToken(token)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment record not found for token: " + token));
+
+        String fullPaymentUrl = (frontendUrl.endsWith("/") ? frontendUrl.substring(0, frontendUrl.length() - 1) : frontendUrl) + "/enroll/" + token;
+        double amount = record.amountInPaise / 100.0;
+
+        emailService.sendEnrollmentPaymentEmail(
+                record.email,
+                record.fullName,
+                record.studentIdNumber,
+                record.courseTitle != null ? record.courseTitle : "Full-Stack Software Engineering",
+                record.batchName != null ? record.batchName : "Selected Cohort",
+                amount,
+                fullPaymentUrl
+        );
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("success", true);
+        res.put("message", "Enrollment payment form sent to student's Gmail (" + record.email + ")");
+        res.put("recipientEmail", record.email);
+        res.put("studentName", record.fullName);
+        res.put("paymentUrl", fullPaymentUrl);
+        return res;
+    }
+
+    /**
+     * Generates a pre-formatted message and direct links for WhatsApp and SMS sharing.
+     */
+    public Map<String, Object> getShareMessage(String token) {
+        EnrollmentRepository.EnrollmentRecord record = enrollmentRepository.findByToken(token)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment record not found for token: " + token));
+
+        String fullPaymentUrl = (frontendUrl.endsWith("/") ? frontendUrl.substring(0, frontendUrl.length() - 1) : frontendUrl) + "/enroll/" + token;
+        double amount = record.amountInPaise / 100.0;
+        String feeFormatted = String.format("₹%,.2f", amount);
+
+        String message = String.format(
+                "🎓 *Skillex Academy - Official Enrollment Form*\n\n" +
+                "Hello *%s*,\n" +
+                "Your registration for *%s* (%s) has been generated.\n\n" +
+                "💰 Course Fee: *%s*\n\n" +
+                "Please open the secure link below to complete your payment via UPI (GPay, PhonePe, Paytm, QR Code) or Cards:\n" +
+                "👉 %s\n\n" +
+                "Your student account will activate automatically after payment.",
+                record.fullName,
+                record.courseTitle != null ? record.courseTitle : "Software Engineering",
+                record.batchName != null ? record.batchName : "Cohort",
+                feeFormatted,
+                fullPaymentUrl
+        );
+
+        String phone = record.phone != null ? record.phone.replaceAll("[^0-9+]", "") : "";
+        if (phone.startsWith("+")) {
+            phone = phone.substring(1);
+        } else if (phone.startsWith("0")) {
+            phone = "91" + phone.substring(1);
+        } else if (phone.length() == 10) {
+            phone = "91" + phone;
+        }
+
+        String encodedMsg = java.net.URLEncoder.encode(message, java.nio.charset.StandardCharsets.UTF_8);
+        String whatsappUrl = phone.isBlank()
+                ? "https://api.whatsapp.com/send?text=" + encodedMsg
+                : "https://wa.me/" + phone + "?text=" + encodedMsg;
+
+        String smsUrl = "sms:" + (phone.isBlank() ? "" : ("+" + phone)) + "?body=" + encodedMsg;
+
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("studentName", record.fullName);
+        resp.put("email", record.email);
+        resp.put("phone", record.phone);
+        resp.put("paymentUrl", fullPaymentUrl);
+        resp.put("shareText", message);
+        resp.put("whatsappUrl", whatsappUrl);
+        resp.put("smsUrl", smsUrl);
+        return resp;
     }
 }

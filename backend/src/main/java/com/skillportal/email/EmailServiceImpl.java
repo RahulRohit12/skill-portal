@@ -697,4 +697,184 @@ public class EmailServiceImpl implements EmailService {
                 "Best regards,\n" +
                 "SkillX Academy Administration";
     }
+
+    @Override
+    public void sendEnrollmentPaymentEmail(
+            String recipientEmail,
+            String studentName,
+            String studentIdNumber,
+            String courseTitle,
+            String batchName,
+            Double amountInRupees,
+            String paymentUrl) {
+
+        if (recipientEmail == null || recipientEmail.trim().isEmpty()) {
+            log.warn("Cannot send enrollment payment email: recipient email is missing.");
+            return;
+        }
+
+        final String targetEmail = recipientEmail.trim();
+        final String effectiveStudentName = studentName != null && !studentName.isBlank() ? studentName : "Learner";
+        final String effectiveStudentId = studentIdNumber != null ? studentIdNumber : "N/A";
+        final String effectiveCourse = courseTitle != null ? courseTitle : "Full-Stack Software Engineering";
+        final String effectiveBatch = batchName != null ? batchName : "Selected Cohort";
+        final String feeFormatted = String.format("₹%,.2f", amountInRupees != null ? amountInRupees : 4999.0);
+        final String effectiveUrl = paymentUrl != null && !paymentUrl.isBlank() ? paymentUrl : (frontendUrl + "/enrollment/");
+
+        CompletableFuture.runAsync(() -> {
+            String subject = "🎓 Complete Your Enrollment & Course Fee Payment - Skillex Academy (" + effectiveCourse + ")";
+            String htmlContent = buildEnrollmentPaymentHtmlTemplate(
+                    effectiveStudentName,
+                    effectiveStudentId,
+                    effectiveCourse,
+                    effectiveBatch,
+                    feeFormatted,
+                    effectiveUrl
+            );
+            String plainText = buildEnrollmentPaymentPlainTextTemplate(
+                    effectiveStudentName,
+                    effectiveStudentId,
+                    effectiveCourse,
+                    effectiveBatch,
+                    feeFormatted,
+                    effectiveUrl
+            );
+
+            boolean sentSuccessfully = false;
+            String errorMessage = null;
+
+            if (isHttpApiConfigured() || isSmtpConfigured()) {
+                try {
+                    sentSuccessfully = sendEmailUnified(targetEmail, subject, plainText, htmlContent);
+                    log.info("Enrollment payment email successfully dispatched to student {}", targetEmail);
+                } catch (Exception ex) {
+                    errorMessage = ex.getMessage();
+                    log.error("Failed to send enrollment payment email to {}: {}", targetEmail, errorMessage);
+                }
+            } else {
+                log.info("[SIMULATED EMAIL] Enrollment Payment Form sent to {} | Student: {} | Link: {}",
+                        targetEmail, effectiveStudentName, effectiveUrl);
+            }
+
+            try {
+                String logSql = "INSERT INTO email_logs (recipient_email, student_name, email_type, subject, status, error_message) VALUES (?, ?, 'ENROLLMENT_PAYMENT_FORM', ?, ?, ?)";
+                String status = sentSuccessfully ? "SENT" : (errorMessage != null ? "FAILED" : "SIMULATED");
+                jdbcTemplate.update(logSql, targetEmail, effectiveStudentName, subject, status, errorMessage);
+            } catch (Exception dbEx) {
+                log.debug("Notice recording email audit log: {}", dbEx.getMessage());
+            }
+        });
+    }
+
+    private String buildEnrollmentPaymentHtmlTemplate(
+            String studentName,
+            String studentId,
+            String courseTitle,
+            String batchName,
+            String feeFormatted,
+            String paymentUrl) {
+
+        return "<!DOCTYPE html>\n" +
+                "<html>\n" +
+                "<head>\n" +
+                "<meta charset=\"utf-8\">\n" +
+                "<style>\n" +
+                "  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px 12px; }\n" +
+                "  .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 18px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }\n" +
+                "  .header { background: linear-gradient(135deg, #090d16 0%, #0284c7 100%); padding: 36px 24px; text-align: center; color: #ffffff; }\n" +
+                "  .header h1 { margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; }\n" +
+                "  .header p { margin: 8px 0 0 0; font-size: 13px; color: #bae6fd; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }\n" +
+                "  .body { padding: 32px 28px; color: #1e293b; }\n" +
+                "  .badge { display: inline-block; background-color: #e0f2fe; color: #0369a1; font-size: 11px; font-weight: 800; padding: 6px 14px; border-radius: 20px; border: 1px solid #bae6fd; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.5px; }\n" +
+                "  .details { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px; margin: 22px 0; }\n" +
+                "  .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #edf2f7; font-size: 13px; }\n" +
+                "  .row:last-child { border-bottom: none; }\n" +
+                "  .label { color: #64748b; font-weight: 600; }\n" +
+                "  .val { color: #0f172a; font-weight: 700; text-align: right; }\n" +
+                "  .fee-val { color: #0284c7; font-size: 16px; font-weight: 900; text-align: right; }\n" +
+                "  .btn-container { text-align: center; margin: 32px 0 20px 0; }\n" +
+                "  .btn { display: inline-block; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff !important; text-decoration: none; padding: 15px 36px; border-radius: 12px; font-weight: 800; font-size: 14px; letter-spacing: 0.5px; box-shadow: 0 4px 14px rgba(2,132,199,0.35); }\n" +
+                "  .methods { text-align: center; font-size: 11px; color: #64748b; margin-top: 12px; line-height: 1.5; }\n" +
+                "  .footer { padding: 22px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; background: #fafafa; }\n" +
+                "</style>\n" +
+                "</head>\n" +
+                "<body>\n" +
+                "  <div class=\"container\">\n" +
+                "    <div class=\"header\">\n" +
+                "      <h1>SKILLEX ACADEMY</h1>\n" +
+                "      <p>Official Student Enrollment & Course Fee Form</p>\n" +
+                "    </div>\n" +
+                "    <div class=\"body\">\n" +
+                "      <div class=\"badge\">🔒 Official Registration Notice</div>\n" +
+                "      <h2 style=\"margin:0 0 12px 0;font-size:18px;color:#0f172a;\">Hello " + studentName + ",</h2>\n" +
+                "      <p style=\"font-size:13px;line-height:1.6;color:#475569;margin:0 0 18px 0;\">\n" +
+                "        Congratulations on taking the next step! Your enrollment form for <strong>" + courseTitle + "</strong> has been generated by Skillex Academy. Please review your enrollment details below and complete your payment to activate your student account.\n" +
+                "      </p>\n" +
+                "      <div class=\"details\">\n" +
+                "        <div class=\"row\">\n" +
+                "          <span class=\"label\">Student Name:</span>\n" +
+                "          <span class=\"val\">" + studentName + "</span>\n" +
+                "        </div>\n" +
+                "        <div class=\"row\">\n" +
+                "          <span class=\"label\">Student ID Code:</span>\n" +
+                "          <span class=\"val\" style=\"font-family:monospace;\">" + studentId + "</span>\n" +
+                "        </div>\n" +
+                "        <div class=\"row\">\n" +
+                "          <span class=\"label\">Course Track:</span>\n" +
+                "          <span class=\"val\">" + courseTitle + "</span>\n" +
+                "        </div>\n" +
+                "        <div class=\"row\">\n" +
+                "          <span class=\"label\">Assigned Cohort:</span>\n" +
+                "          <span class=\"val\">" + batchName + "</span>\n" +
+                "        </div>\n" +
+                "        <div class=\"row\">\n" +
+                "          <span class=\"label\">Total Course Fee:</span>\n" +
+                "          <span class=\"fee-val\">" + feeFormatted + "</span>\n" +
+                "        </div>\n" +
+                "      </div>\n" +
+                "      <div class=\"btn-container\">\n" +
+                "        <a href=\"" + paymentUrl + "\" class=\"btn\" target=\"_blank\">👉 Click Here to Pay & Complete Enrollment</a>\n" +
+                "        <div class=\"methods\">\n" +
+                "          💳 <strong>Instant Payment Supported:</strong> UPI, Google Pay, PhonePe, Paytm, QR Code, Cards (Visa/Mastercard/RuPay), & Net Banking\n" +
+                "        </div>\n" +
+                "      </div>\n" +
+                "      <p style=\"font-size:11px;color:#64748b;line-height:1.6;border-top:1px solid #e2e8f0;padding-top:14px;margin-top:20px;\">\n" +
+                "        Can't click the button? Copy and paste this secure link directly in your browser:<br/>\n" +
+                "        <a href=\"" + paymentUrl + "\" style=\"color:#0284c7;word-break:break-all;text-decoration:underline;\">" + paymentUrl + "</a>\n" +
+                "      </p>\n" +
+                "    </div>\n" +
+                "    <div class=\"footer\">\n" +
+                "      <p style=\"margin:0 0 6px 0;\">🔒 256-Bit SSL Encrypted &bull; Razorpay Secure Payment Gateway &bull; Skillex Academy</p>\n" +
+                "      <p style=\"margin:0;\">Student portal privileges and attendance credentials activate automatically upon verified transaction.</p>\n" +
+                "    </div>\n" +
+                "  </div>\n" +
+                "</body>\n" +
+                "</html>";
+    }
+
+    private String buildEnrollmentPaymentPlainTextTemplate(
+            String studentName,
+            String studentId,
+            String courseTitle,
+            String batchName,
+            String feeFormatted,
+            String paymentUrl) {
+
+        return "SKILLEX ACADEMY - STUDENT ENROLLMENT & PAYMENT FORM\n" +
+                "====================================================\n\n" +
+                "Dear " + studentName + ",\n\n" +
+                "Your enrollment registration for " + courseTitle + " at Skillex Academy has been created.\n\n" +
+                "ENROLLMENT DETAILS:\n" +
+                "- Student Name: " + studentName + "\n" +
+                "- Student ID Code: " + studentId + "\n" +
+                "- Course Track: " + courseTitle + "\n" +
+                "- Assigned Batch: " + batchName + "\n" +
+                "- Total Course Fee: " + feeFormatted + "\n\n" +
+                "PAYMENT INSTRUCTIONS:\n" +
+                "Please click the secure link below to open your payment form and pay via UPI (GPay, PhonePe, Paytm, QR Code), Cards, or Net Banking:\n\n" +
+                paymentUrl + "\n\n" +
+                "Note: Your student account and portal privileges will activate automatically upon verified payment.\n\n" +
+                "Best regards,\n" +
+                "Skillex Academy Administration";
+    }
 }

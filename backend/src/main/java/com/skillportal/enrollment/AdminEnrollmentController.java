@@ -42,4 +42,18 @@ public class AdminEnrollmentController {
         List<EnrollmentDto.EnrollmentAdminItem> items = enrollmentService.listEnrollmentsForAdmin(search, status, batchId);
         return ResponseEntity.ok(ApiResponse.success(items));
     }
+
+    @PostMapping("/send-email/{token}")
+    @Operation(summary = "Admin sends or resends the official enrollment payment form to student's Gmail")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> sendEmail(@PathVariable String token) {
+        java.util.Map<String, Object> result = enrollmentService.sendEnrollmentEmail(token);
+        return ResponseEntity.ok(ApiResponse.success("Enrollment payment form sent to student's Gmail", result));
+    }
+
+    @GetMapping("/share-message/{token}")
+    @Operation(summary = "Get pre-formatted WhatsApp and SMS message links for student enrollment")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getShareMessage(@PathVariable String token) {
+        java.util.Map<String, Object> result = enrollmentService.getShareMessage(token);
+        return ResponseEntity.ok(ApiResponse.success("Share message generated", result));
+    }
 }

@@ -74,4 +74,18 @@ public class EnrollmentController {
         Map<String, Object> result = enrollmentService.updateCredentials(token, req);
         return ResponseEntity.ok(ApiResponse.success("Login credentials updated successfully", result));
     }
+
+    @PostMapping("/send-email/{token}")
+    @Operation(summary = "Dispatch / resend official enrollment payment form to student's Gmail")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> sendEmail(@PathVariable String token) {
+        Map<String, Object> result = enrollmentService.sendEnrollmentEmail(token);
+        return ResponseEntity.ok(ApiResponse.success("Enrollment payment form dispatched to student's Gmail", result));
+    }
+
+    @GetMapping("/share-message/{token}")
+    @Operation(summary = "Get pre-formatted WhatsApp and SMS message links for student enrollment")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getShareMessage(@PathVariable String token) {
+        Map<String, Object> result = enrollmentService.getShareMessage(token);
+        return ResponseEntity.ok(ApiResponse.success("Share message generated", result));
+    }
 }

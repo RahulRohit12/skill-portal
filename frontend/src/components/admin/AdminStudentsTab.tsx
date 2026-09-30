@@ -25,7 +25,11 @@ import {
   CreditCard,
   Copy,
   ExternalLink,
-  Check
+  Check,
+  Mail,
+  MessageSquare,
+  Send,
+  Phone
 } from 'lucide-react';
 import api from '../../api/client';
 import {
@@ -56,11 +60,15 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
   const [enrollmentSearch, setEnrollmentSearch] = useState('');
   const [enrollmentStatusFilter, setEnrollmentStatusFilter] = useState<string>('ALL');
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [sendingEmailToken, setSendingEmailToken] = useState<string | null>(null);
+  const [emailSentTokens, setEmailSentTokens] = useState<Set<string>>(new Set());
+  const [copiedMessageToken, setCopiedMessageToken] = useState<string | null>(null);
   const [generatedLinkData, setGeneratedLinkData] = useState<{
     enrollmentToken: string;
     paymentUrl: string;
     studentName: string;
     email: string;
+    phone?: string;
     amountInRupees: number;
     courseTitle: string;
     batchName: string;
@@ -198,19 +206,62 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
         paymentUrl: fullPaymentUrl,
         studentName: data.studentName,
         email: data.email,
+        phone: addForm.phone?.trim() || undefined,
         amountInRupees: Number(addForm.amountInRupees),
         courseTitle: selectedCourseObj?.title || data.courseTitle || 'Course Curriculum',
         batchName: selectedBatchObj?.name || data.batchName || 'General Batch',
       });
 
+      if (data.enrollmentToken) {
+        setEmailSentTokens((prev) => new Set(prev).add(data.enrollmentToken));
+      }
+
       setShowAddModal(false);
-      showNotification('Secure enrollment & payment link generated successfully!');
+      showNotification("Secure enrollment form generated & dispatched to student's Gmail!");
       fetchEnrollments();
     } catch (err: any) {
       setFormError(err.response?.data?.message || 'Failed to generate enrollment link.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSendEmail = async (token: string, studentEmail?: string) => {
+    setSendingEmailToken(token);
+    try {
+      await api.post(`/admin/enrollments/send-email/${token}`);
+      setEmailSentTokens((prev) => new Set(prev).add(token));
+      showNotification(`Payment form sent to student's Gmail (${studentEmail || 'registered email'})!`);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to send email to student.');
+    } finally {
+      setSendingEmailToken(null);
+    }
+  };
+
+  const handleOpenWhatsApp = (studentName: string, phone: string | undefined, paymentUrl: string, courseTitle: string, amount: number) => {
+    const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
+    const phoneWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+    const msg = `Dear ${studentName},\n\nYour enrollment invitation for *${courseTitle}* at Skillex Academy is ready.\n\n💰 Course Fee: ₹${amount.toLocaleString('en-IN')}\n\nPlease review your details and complete secure payment to activate your student account:\n👉 ${paymentUrl}\n\nAccepted: UPI (Google Pay, PhonePe, Paytm), QR, Cards & Net Banking.\n\nThank you,\nSkillex Admissions Team`;
+    const waUrl = phoneWithCountry
+      ? `https://wa.me/${phoneWithCountry}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, '_blank');
+  };
+
+  const handleOpenSms = (phone: string | undefined, studentName: string, paymentUrl: string, courseTitle: string, amount: number) => {
+    const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
+    const msg = `Dear ${studentName}, your enrollment invitation for ${courseTitle} (Fee: Rs. ${amount}) is ready. Pay & complete registration at: ${paymentUrl} - Skillex Academy`;
+    const smsUrl = cleanPhone ? `sms:${cleanPhone}?body=${encodeURIComponent(msg)}` : `sms:?body=${encodeURIComponent(msg)}`;
+    window.location.href = smsUrl;
+  };
+
+  const handleCopyShareMessage = (token: string, studentName: string, paymentUrl: string, courseTitle: string, amount: number) => {
+    const msg = `Dear ${studentName},\n\nYour enrollment invitation for *${courseTitle}* at Skillex Academy is ready.\n\nCourse Fee: ₹${amount.toLocaleString('en-IN')}\n\nPlease review your details and complete secure payment to activate your student account:\n${paymentUrl}\n\nAccepted: UPI (Google Pay, PhonePe, Paytm), QR, Debit/Credit Cards & Net Banking.\n\nThank you,\nSkillex Admissions Team`;
+    navigator.clipboard.writeText(msg);
+    setCopiedMessageToken(token);
+    setTimeout(() => setCopiedMessageToken(null), 3000);
+    showNotification('Student invitation message copied to clipboard!');
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -862,7 +913,30 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
                                 )}
                               </div>
                             ) : (
-                              <div className="flex items-center justify-end gap-1.5">
+                              <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                <button
+                                  onClick={() => handleSendEmail(item.enrollmentToken, item.email)}
+                                  disabled={sendingEmailToken === item.enrollmentToken}
+                                  className="px-2.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/70 font-bold text-[10px] flex items-center gap-1 transition-colors disabled:opacity-50"
+                                  title={`Send official payment form to ${item.email}`}
+                                >
+                                  <Mail className="w-3 h-3" />
+                                  <span>{sendingEmailToken === item.enrollmentToken ? 'Sending...' : 'Gmail'}</span>
+                                </button>
+                                <button
+                                  onClick={() => handleOpenWhatsApp(
+                                    item.fullName,
+                                    item.phone,
+                                    `${window.location.origin}/enroll/${item.enrollmentToken}`,
+                                    item.courseTitle,
+                                    item.amountInRupees
+                                  )}
+                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-950/70 font-bold text-[10px] flex items-center gap-1 transition-colors"
+                                  title="Send payment link with pre-filled message via WhatsApp"
+                                >
+                                  <MessageSquare className="w-3 h-3" />
+                                  <span>WhatsApp</span>
+                                </button>
                                 <button
                                   onClick={(evt) => handleCopyLink(item.enrollmentToken, evt)}
                                   className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[10px] flex items-center gap-1 transition-colors"
@@ -883,7 +957,7 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
                                 <button
                                   onClick={() => window.open(`${window.location.origin}/enroll/${item.enrollmentToken}`, '_blank')}
                                   className="px-2.5 py-1.5 rounded-lg bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-950/70 font-bold text-[10px] flex items-center gap-1 transition-colors"
-                                  title="Open / Resend Payment Link"
+                                  title="Open / View Payment Form"
                                 >
                                   <ExternalLink className="w-3 h-3" />
                                   <span>Open Form</span>
@@ -1234,6 +1308,100 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
                     <>
                       <Copy className="w-3.5 h-3.5" />
                       <span>Copy</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Direct Dispatch to Student Actions */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                  <Send className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" /> Send Form Directly to Student
+                </span>
+                {emailSentTokens.has(generatedLinkData.enrollmentToken) && (
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Auto-Dispatched to Gmail
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {/* Send / Resend to Gmail */}
+                <button
+                  type="button"
+                  onClick={() => handleSendEmail(generatedLinkData.enrollmentToken, generatedLinkData.email)}
+                  disabled={sendingEmailToken === generatedLinkData.enrollmentToken}
+                  className="px-3 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+                  title="Send official payment form to student's Gmail"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>
+                    {sendingEmailToken === generatedLinkData.enrollmentToken
+                      ? 'Sending...'
+                      : emailSentTokens.has(generatedLinkData.enrollmentToken)
+                      ? 'Resend to Gmail'
+                      : 'Send to Gmail'}
+                  </span>
+                </button>
+
+                {/* WhatsApp Dispatch */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenWhatsApp(
+                    generatedLinkData.studentName,
+                    generatedLinkData.phone,
+                    generatedLinkData.paymentUrl,
+                    generatedLinkData.courseTitle,
+                    generatedLinkData.amountInRupees
+                  )}
+                  className="px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                  title="Send payment link with personalized message via WhatsApp"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Send on WhatsApp</span>
+                </button>
+
+                {/* SMS Dispatch */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenSms(
+                    generatedLinkData.phone,
+                    generatedLinkData.studentName,
+                    generatedLinkData.paymentUrl,
+                    generatedLinkData.courseTitle,
+                    generatedLinkData.amountInRupees
+                  )}
+                  className="px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                  title="Open SMS app with pre-filled message"
+                >
+                  <Phone className="w-4 h-4" />
+                  <span>Send SMS</span>
+                </button>
+
+                {/* Copy Full Message */}
+                <button
+                  type="button"
+                  onClick={() => handleCopyShareMessage(
+                    generatedLinkData.enrollmentToken,
+                    generatedLinkData.studentName,
+                    generatedLinkData.paymentUrl,
+                    generatedLinkData.courseTitle,
+                    generatedLinkData.amountInRupees
+                  )}
+                  className="px-3 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                  title="Copy ready-to-send formatted text message"
+                >
+                  {copiedMessageToken === generatedLinkData.enrollmentToken ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>Message Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span>Copy Full Message</span>
                     </>
                   )}
                 </button>
