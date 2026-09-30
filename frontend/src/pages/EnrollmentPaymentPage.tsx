@@ -40,6 +40,8 @@ export const EnrollmentPaymentPage: React.FC = () => {
   const [verifying, setVerifying] = useState<boolean>(false);
   const [paymentSuccess, setPaymentSuccess] = useState<any | null>(null);
   const [paymentFailedMsg, setPaymentFailedMsg] = useState<string | null>(null);
+  const [showSandboxModal, setShowSandboxModal] = useState<boolean>(false);
+  const [sandboxOrderData, setSandboxOrderData] = useState<RazorpayOrderCreateResponse | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -100,15 +102,24 @@ export const EnrollmentPaymentPage: React.FC = () => {
         throw new Error('Failed to initialize Razorpay payment order.');
       }
 
-      // 2. Load script
-      const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded) {
-        // Fallback for offline/test environments: invoke test signature verification helper
-        handleTestModePayment(orderData);
+      // Check if backend has real live Razorpay credentials configured
+      if (!orderData.liveGateway) {
+        // Test simulation mode: open Sandbox test dialog (prevents passing fake order_id to checkout.js)
+        setSandboxOrderData(orderData);
+        setShowSandboxModal(true);
+        setProcessingPayment(false);
         return;
       }
 
-      // 3. Configure Razorpay Standard Checkout
+      // 2. Load script for live payment
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        setPaymentFailedMsg('Unable to load Razorpay payment SDK. Please verify your connection.');
+        setProcessingPayment(false);
+        return;
+      }
+
+      // 3. Configure Razorpay Standard Checkout with registered live order ID
       const options = {
         key: orderData.keyId,
         amount: orderData.amount,
@@ -149,13 +160,8 @@ export const EnrollmentPaymentPage: React.FC = () => {
       rzp.open();
     } catch (err: any) {
       console.error('Payment checkout initiation failed', err);
-      // If Razorpay keys are test placeholders, enable sandbox simulated payment flow
-      if (details.razorpayKeyId?.includes('test') || details.razorpayKeyId?.includes('placeholder')) {
-        await handleTestModePaymentFallback();
-      } else {
-        setPaymentFailedMsg(err.response?.data?.message || err.message || 'Failed to open payment gateway.');
-        setProcessingPayment(false);
-      }
+      setPaymentFailedMsg(err.response?.data?.message || err.message || 'Failed to open payment gateway.');
+      setProcessingPayment(false);
     }
   };
 
@@ -431,6 +437,19 @@ export const EnrollmentPaymentPage: React.FC = () => {
                   <span className="text-[11px] text-cyan-400 font-mono">INR ({details?.currency})</span>
                 </div>
 
+                {/* Gateway Status Badge */}
+                {details?.liveGateway ? (
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-semibold">
+                    <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>Live Gateway Active (UPI, Cards, NetBanking)</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] font-semibold">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                    <span>Test Sandbox Mode (Add Live Keys in Render for Real Payments)</span>
+                  </div>
+                )}
+
                 {/* Line Items */}
                 <div className="space-y-3 text-xs">
                   <div className="flex justify-between items-center text-slate-400">
@@ -498,6 +517,76 @@ export const EnrollmentPaymentPage: React.FC = () => {
                     <span className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700">Wallets</span>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Sandbox Test Modal */}
+        {showSandboxModal && sandboxOrderData && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-slate-700/80 p-6 sm:p-7 shadow-2xl space-y-5 text-left relative overflow-hidden">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <Sparkles className="w-6 h-6" />
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-black uppercase tracking-wider">
+                  Test Sandbox Mode
+                </span>
+                <h3 className="text-lg font-black text-white tracking-tight">
+                  Razorpay Simulation & Activation
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Your server is running in local test mode because live Razorpay credentials are not yet added to Render.
+                </p>
+              </div>
+
+              {/* Order Box */}
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2">
+                <div className="flex justify-between items-center text-slate-400">
+                  <span>Student:</span>
+                  <span className="font-bold text-white">{sandboxOrderData.studentName}</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-400">
+                  <span>Course Track:</span>
+                  <span className="font-semibold text-white truncate max-w-[200px]">{sandboxOrderData.courseTitle}</span>
+                </div>
+                <div className="flex justify-between items-center text-emerald-400 font-extrabold pt-1 border-t border-slate-800">
+                  <span>Amount to Verify:</span>
+                  <span className="text-sm">₹{(sandboxOrderData.amount / 100).toLocaleString('en-IN')}.00</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 text-[11px] text-slate-300 space-y-1">
+                <p className="font-semibold text-white">To enable REAL student payments into your bank account:</p>
+                <p className="text-slate-400">
+                  Add <code className="text-cyan-300 bg-slate-900 px-1 py-0.5 rounded">RAZORPAY_KEY_ID</code> and <code className="text-cyan-300 bg-slate-900 px-1 py-0.5 rounded">RAZORPAY_KEY_SECRET</code> from your Razorpay Dashboard into your Render Environment Variables.
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-2.5 pt-1">
+                <button
+                  onClick={() => {
+                    setShowSandboxModal(false);
+                    handleTestModePayment(sandboxOrderData);
+                  }}
+                  className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs tracking-wide transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Simulate Verified Payment & Activate Student</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowSandboxModal(false);
+                    setProcessingPayment(false);
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors text-center"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </div>

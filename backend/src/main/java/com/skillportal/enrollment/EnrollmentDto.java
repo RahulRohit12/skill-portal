@@ -96,6 +96,7 @@ public class EnrollmentDto {
         private String enrollmentStatus;
         private String razorpayKeyId;
         private boolean isPaid;
+        private boolean liveGateway;
 
         public String getEnrollmentToken() { return enrollmentToken; }
         public void setEnrollmentToken(String enrollmentToken) { this.enrollmentToken = enrollmentToken; }
@@ -147,6 +148,9 @@ public class EnrollmentDto {
 
         public boolean isPaid() { return isPaid; }
         public void setPaid(boolean paid) { isPaid = paid; }
+
+        public boolean isLiveGateway() { return liveGateway; }
+        public void setLiveGateway(boolean liveGateway) { this.liveGateway = liveGateway; }
     }
 
     public static class RazorpayOrderCreateResponse {
@@ -158,6 +162,7 @@ public class EnrollmentDto {
         private String studentEmail;
         private String studentPhone;
         private String courseTitle;
+        private boolean liveGateway;
 
         public String getOrderId() { return orderId; }
         public void setOrderId(String orderId) { this.orderId = orderId; }
@@ -182,6 +187,9 @@ public class EnrollmentDto {
 
         public String getCourseTitle() { return courseTitle; }
         public void setCourseTitle(String courseTitle) { this.courseTitle = courseTitle; }
+
+        public boolean isLiveGateway() { return liveGateway; }
+        public void setLiveGateway(boolean liveGateway) { this.liveGateway = liveGateway; }
     }
 
     public static class PaymentVerificationRequest {

@@ -111,6 +111,7 @@ public class EnrollmentService {
         resp.setEnrollmentStatus(record.enrollmentStatus);
         resp.setRazorpayKeyId(razorpayService.getKeyId());
         resp.setPaid("PAID".equalsIgnoreCase(record.paymentStatus) || "COMPLETED".equalsIgnoreCase(record.enrollmentStatus));
+        resp.setLiveGateway(razorpayService.isLiveRazorpayConfigured());
 
         return resp;
     }
@@ -128,17 +129,18 @@ public class EnrollmentService {
         }
 
         // Amount is strictly fetched from database record
-        String orderId = razorpayService.createOrder(
+        RazorpayService.RazorpayOrderResult orderResult = razorpayService.createOrder(
                 record.amountInPaise,
                 record.enrollmentToken,
                 record.email,
                 record.fullName
         );
 
-        enrollmentRepository.updateRazorpayOrderId(token, orderId);
+        enrollmentRepository.updateRazorpayOrderId(token, orderResult.getOrderId());
 
         EnrollmentDto.RazorpayOrderCreateResponse resp = new EnrollmentDto.RazorpayOrderCreateResponse();
-        resp.setOrderId(orderId);
+        resp.setOrderId(orderResult.getOrderId());
+        resp.setLiveGateway(orderResult.isLiveGateway());
         resp.setAmount(record.amountInPaise);
         resp.setCurrency(record.currency != null ? record.currency : "INR");
         resp.setKeyId(razorpayService.getKeyId());

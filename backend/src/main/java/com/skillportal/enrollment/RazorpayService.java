@@ -41,12 +41,30 @@ public class RazorpayService {
         return currency;
     }
 
+    public boolean isLiveRazorpayConfigured() {
+        return keySecret != null && !keySecret.contains("placeholder") && !keySecret.isBlank()
+                && keyId != null && !keyId.contains("placeholder") && !keyId.isBlank();
+    }
+
+    public static class RazorpayOrderResult {
+        private final String orderId;
+        private final boolean liveGateway;
+
+        public RazorpayOrderResult(String orderId, boolean liveGateway) {
+            this.orderId = orderId;
+            this.liveGateway = liveGateway;
+        }
+
+        public String getOrderId() { return orderId; }
+        public boolean isLiveGateway() { return liveGateway; }
+    }
+
     /**
      * Creates an order with Razorpay.
      * Uses Razorpay API if valid keys are provided; falls back to cryptographically signed test orders if offline.
      */
-    public String createOrder(long amountInPaise, String receipt, String studentEmail, String studentName) {
-        boolean isPlaceholder = keySecret == null || keySecret.contains("placeholder") || keySecret.isBlank();
+    public RazorpayOrderResult createOrder(long amountInPaise, String receipt, String studentEmail, String studentName) {
+        boolean isPlaceholder = !isLiveRazorpayConfigured();
 
         if (!isPlaceholder) {
             try {
@@ -73,7 +91,8 @@ public class RazorpayService {
                 if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                     Object id = response.getBody().get("id");
                     if (id != null) {
-                        return id.toString();
+                        log.info("Razorpay order successfully created on Razorpay API: {}", id);
+                        return new RazorpayOrderResult(id.toString(), true);
                     }
                 }
             } catch (Exception e) {
@@ -82,7 +101,8 @@ public class RazorpayService {
         }
 
         // Test/Development order ID generator
-        return "order_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        String simOrderId = "sim_order_" + UUID.randomUUID().toString().replace("-", "").substring(0, 14);
+        return new RazorpayOrderResult(simOrderId, false);
     }
 
     /**

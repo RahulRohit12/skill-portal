@@ -1141,6 +1141,7 @@ export interface StudentEnrollmentDetailResponse {
   enrollmentStatus: 'PENDING' | 'COMPLETED' | 'EXPIRED';
   razorpayKeyId?: string;
   paid: boolean;
+  liveGateway?: boolean;
 }
 
 export interface RazorpayOrderCreateResponse {
@@ -1152,6 +1153,7 @@ export interface RazorpayOrderCreateResponse {
   studentEmail: string;
   studentPhone: string;
   courseTitle: string;
+  liveGateway?: boolean;
 }
 
 export interface PaymentVerificationRequest {
