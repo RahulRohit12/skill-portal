@@ -69,7 +69,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/auth/**", "/api/v1/health/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/courses/**", "/api/v1/subjects/**", "/api/v1/modules/**", "/api/v1/topics/**").permitAll()
-                .requestMatchers("/api/v1/jobs/**", "/api/v1/career-hub/**", "/api/v1/enrollment/**").permitAll()
+                .requestMatchers("/api/v1/jobs/**", "/api/v1/career-hub/**", "/api/v1/enrollment/**", "/api/v1/payment/**", "/api/create-order", "/api/verify-payment").permitAll()
                 .requestMatchers("/api/v1/admin/**", "/api/v1/attendance/qr/**", "/api/v1/attendance/scans/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )

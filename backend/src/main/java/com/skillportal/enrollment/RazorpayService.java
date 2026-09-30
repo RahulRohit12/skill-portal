@@ -19,10 +19,10 @@ public class RazorpayService {
     private static final Logger log = LoggerFactory.getLogger(RazorpayService.class);
     private static final String RAZORPAY_API_URL = "https://api.razorpay.com/v1/orders";
 
-    @Value("${razorpay.key-id:rzp_test_1DP5mmOlF5G5ag}")
+    @Value("${razorpay.key-id:rzp_test_TiNXI1YOjgWmvp}")
     private String keyId;
 
-    @Value("${razorpay.key-secret:s3cr3t_test_key_placeholder}")
+    @Value("${razorpay.key-secret:ECalkr2eFDQoXYtw4rHlySO5}")
     private String keySecret;
 
     @Value("${razorpay.webhook-secret:whsec_test_secret_placeholder}")
