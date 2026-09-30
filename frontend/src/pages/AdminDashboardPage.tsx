@@ -187,7 +187,7 @@ export const AdminDashboardPage: React.FC = () => {
         )}
 
         {currentTab === 'students' && (
-          <AdminStudentsTab batches={batches} />
+          <AdminStudentsTab batches={batches} courses={courses} />
         )}
 
         {currentTab === 'batches' && (

@@ -1097,4 +1097,90 @@ export interface JobItem {
   status?: string;
 }
 
+// ==========================================
+// STUDENT ENROLLMENT & RAZORPAY PAYMENT
+// ==========================================
+export interface AdminEnrollmentGenerateRequest {
+  fullName: string;
+  email: string;
+  studentIdNumber: string;
+  phone?: string;
+  college?: string;
+  semesterOrYear?: string;
+  batchId: number;
+  courseId?: number;
+  amountInRupees?: number;
+  password?: string;
+}
+
+export interface EnrollmentGenerateResponse {
+  enrollmentToken: string;
+  paymentLink: string;
+  amountInRupees: number;
+  studentName: string;
+  email: string;
+  batchName?: string;
+  courseTitle?: string;
+}
+
+export interface StudentEnrollmentDetailResponse {
+  enrollmentToken: string;
+  fullName: string;
+  email: string;
+  studentIdNumber: string;
+  phone?: string;
+  college?: string;
+  batchId: number;
+  batchName: string;
+  courseId?: number;
+  courseTitle: string;
+  amountInRupees: number;
+  amountInPaise: number;
+  currency: string;
+  paymentStatus: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+  enrollmentStatus: 'PENDING' | 'COMPLETED' | 'EXPIRED';
+  razorpayKeyId?: string;
+  paid: boolean;
+}
+
+export interface RazorpayOrderCreateResponse {
+  orderId: string;
+  amount: number;
+  currency: string;
+  keyId: string;
+  studentName: string;
+  studentEmail: string;
+  studentPhone: string;
+  courseTitle: string;
+}
+
+export interface PaymentVerificationRequest {
+  razorpayPaymentId: string;
+  razorpayOrderId: string;
+  razorpaySignature: string;
+  password?: string;
+}
+
+export interface EnrollmentAdminItem {
+  id: number;
+  enrollmentToken: string;
+  fullName: string;
+  email: string;
+  studentIdNumber: string;
+  phone?: string;
+  college?: string;
+  batchId: number;
+  batchName: string;
+  courseId?: number;
+  courseTitle: string;
+  amountInRupees: number;
+  paymentStatus: 'PENDING' | 'PAID' | 'FAILED';
+  enrollmentStatus: 'PENDING' | 'COMPLETED';
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  studentUserId?: number;
+  createdAt: string;
+  paidAt?: string;
+}
+
 
