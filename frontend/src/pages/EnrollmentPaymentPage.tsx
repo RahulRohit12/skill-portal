@@ -18,7 +18,10 @@ import {
   Phone,
   BookOpen,
   Calendar,
-  Check
+  Check,
+  QrCode,
+  Smartphone,
+  Building2
 } from 'lucide-react';
 import api from '../api/client';
 import { StudentEnrollmentDetailResponse, RazorpayOrderCreateResponse } from '../types';
@@ -42,6 +45,7 @@ export const EnrollmentPaymentPage: React.FC = () => {
   const [paymentFailedMsg, setPaymentFailedMsg] = useState<string | null>(null);
   const [showSandboxModal, setShowSandboxModal] = useState<boolean>(false);
   const [sandboxOrderData, setSandboxOrderData] = useState<RazorpayOrderCreateResponse | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
 
   useEffect(() => {
     if (!token) {
@@ -120,6 +124,15 @@ export const EnrollmentPaymentPage: React.FC = () => {
       }
 
       // 3. Configure Razorpay Standard Checkout with registered live order ID
+      const prefillData: any = {
+        name: orderData.studentName,
+        email: orderData.studentEmail,
+        method: selectedMethod,
+      };
+      if (orderData.studentPhone && orderData.studentPhone.trim().length >= 10) {
+        prefillData.contact = orderData.studentPhone.replace(/[^\d+]/g, '');
+      }
+
       const options = {
         key: orderData.keyId,
         amount: orderData.amount,
@@ -128,10 +141,32 @@ export const EnrollmentPaymentPage: React.FC = () => {
         description: `Enrollment: ${orderData.courseTitle}`,
         image: 'https://getmaterials.in/_next/image?url=%2Fimages%2Ficons%2Fstudent5.png&w=1920&q=75',
         order_id: orderData.orderId,
-        prefill: {
-          name: orderData.studentName,
-          email: orderData.studentEmail,
-          contact: orderData.studentPhone,
+        prefill: prefillData,
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: 'Pay via UPI, QR Code, PhonePe, Google Pay, Paytm',
+                instruments: [
+                  { method: 'upi', flows: ['qr', 'intent', 'collect'] }
+                ]
+              },
+              cards: {
+                name: 'Cards & Net Banking',
+                instruments: [
+                  { method: 'card' },
+                  { method: 'netbanking' },
+                  { method: 'wallet' }
+                ]
+              }
+            },
+            sequence: selectedMethod === 'card'
+              ? ['block.cards', 'block.upi']
+              : ['block.upi', 'block.cards'],
+            preferences: {
+              show_default_blocks: true
+            }
+          }
         },
         theme: {
           color: '#00c2ff',
@@ -475,6 +510,68 @@ export const EnrollmentPaymentPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Preferred Payment Method Selector */}
+                <div className="space-y-2 pt-1 border-t border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                      Select Payment Option
+                    </span>
+                    <span className="text-[10px] font-semibold text-emerald-400">
+                      ⚡ Instant Verification
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMethod('upi')}
+                      className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center gap-1.5 ${
+                        selectedMethod === 'upi'
+                          ? 'bg-cyan-500/15 border-cyan-400 text-white shadow-md shadow-cyan-500/20 ring-1 ring-cyan-400'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                        <QrCode className="w-4 h-4" />
+                      </div>
+                      <span className="text-xs font-bold leading-tight">UPI & QR</span>
+                      <span className="text-[9px] text-cyan-300 font-semibold">GPay • PhonePe</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMethod('card')}
+                      className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center gap-1.5 ${
+                        selectedMethod === 'card'
+                          ? 'bg-cyan-500/15 border-cyan-400 text-white shadow-md shadow-cyan-500/20 ring-1 ring-cyan-400'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-sky-500/20 flex items-center justify-center text-sky-400">
+                        <CreditCard className="w-4 h-4" />
+                      </div>
+                      <span className="text-xs font-bold leading-tight">Cards</span>
+                      <span className="text-[9px] text-slate-400 font-semibold">Visa • RuPay • MC</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMethod('netbanking')}
+                      className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center gap-1.5 ${
+                        selectedMethod === 'netbanking'
+                          ? 'bg-cyan-500/15 border-cyan-400 text-white shadow-md shadow-cyan-500/20 ring-1 ring-cyan-400'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <span className="text-xs font-bold leading-tight">NetBanking</span>
+                      <span className="text-[9px] text-slate-400 font-semibold">50+ Banks</span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Pay Now Button */}
                 <div className="space-y-3 pt-2">
                   <button
@@ -492,10 +589,20 @@ export const EnrollmentPaymentPage: React.FC = () => {
                         <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
                         <span>Connecting to Razorpay...</span>
                       </>
-                    ) : (
+                    ) : selectedMethod === 'upi' ? (
+                      <>
+                        <QrCode className="w-5 h-5 text-slate-950 stroke-[2.5]" />
+                        <span>PAY ₹{details?.amountInRupees?.toLocaleString('en-IN')} VIA UPI / QR / GPAY</span>
+                      </>
+                    ) : selectedMethod === 'card' ? (
                       <>
                         <CreditCard className="w-5 h-5 fill-slate-950" />
-                        <span>PAY NOW ₹{details?.amountInRupees?.toLocaleString('en-IN')}</span>
+                        <span>PAY ₹{details?.amountInRupees?.toLocaleString('en-IN')} VIA CARD</span>
+                      </>
+                    ) : (
+                      <>
+                        <Building2 className="w-5 h-5 text-slate-950" />
+                        <span>PAY ₹{details?.amountInRupees?.toLocaleString('en-IN')} VIA NETBANKING</span>
                       </>
                     )}
                   </button>
@@ -508,13 +615,30 @@ export const EnrollmentPaymentPage: React.FC = () => {
                 {/* Supported Payment Badges */}
                 <div className="pt-3 border-t border-slate-800/80 space-y-2">
                   <span className="text-[10px] font-bold text-slate-400 block text-center uppercase tracking-wider">
-                    Accepted Payment Methods
+                    Supported Payment Methods
                   </span>
-                  <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] font-bold text-slate-300">
-                    <span className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700">UPI (GPay, PhonePe, Paytm)</span>
-                    <span className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700">Credit / Debit Cards</span>
-                    <span className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700">Net Banking</span>
-                    <span className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700">Wallets</span>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 text-[10px] font-bold">
+                    <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center gap-1">
+                      <QrCode className="w-3 h-3" /> UPI QR Scan
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-300">
+                      PhonePe
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300">
+                      Google Pay
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-300">
+                      Paytm UPI
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                      BHIM / CRED
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300">
+                      RuPay / Visa / MC
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300">
+                      Net Banking (50+ Banks)
+                    </span>
                   </div>
                 </div>
               </div>

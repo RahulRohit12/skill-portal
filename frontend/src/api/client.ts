@@ -1,6 +1,6 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 
-const defaultUrl = import.meta.env.DEV ? 'http://localhost:8080' : 'https://skill-portal-1-mn1n.onrender.com';
+const defaultUrl = 'https://skill-portal-1-mn1n.onrender.com';
 const rawBaseUrl = import.meta.env.VITE_API_URL || defaultUrl;
 const apiBaseUrl = `${rawBaseUrl.replace(/\/+$/, '')}/api/v1`;
 
