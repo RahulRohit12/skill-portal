@@ -165,26 +165,39 @@ export const EnrollmentPaymentPage: React.FC = () => {
           display: {
             blocks: {
               upi: {
-                name: 'Pay via UPI, QR Code, PhonePe, Google Pay, Paytm',
+                name: 'Pay via UPI / QR (Google Pay, PhonePe, Paytm, BHIM)',
                 instruments: [
-                  { method: 'upi', flows: ['qr', 'intent', 'collect'] }
+                  {
+                    method: 'upi',
+                    flows: ['intent', 'qr'],
+                    apps: ['google_pay', 'phonepe', 'paytm']
+                  }
                 ]
               },
               cards: {
-                name: 'Cards & Net Banking',
-                instruments: [
-                  { method: 'card' },
-                  { method: 'netbanking' },
-                  { method: 'wallet' }
-                ]
+                name: 'Cards (Debit / Credit)',
+                instruments: [{ method: 'card' }]
+              },
+              netbanking: {
+                name: 'Net Banking (50+ Banks)',
+                instruments: [{ method: 'netbanking' }]
+              },
+              wallets: {
+                name: 'Wallets',
+                instruments: [{ method: 'wallet' }]
               }
             },
             sequence: selectedMethod === 'card'
-              ? ['block.cards', 'block.upi']
-              : ['block.upi', 'block.cards'],
+              ? ['block.cards', 'block.upi', 'block.netbanking', 'block.wallets']
+              : selectedMethod === 'netbanking'
+              ? ['block.netbanking', 'block.upi', 'block.cards', 'block.wallets']
+              : ['block.upi', 'block.cards', 'block.netbanking', 'block.wallets'],
             preferences: {
               show_default_blocks: true
-            }
+            },
+            hide: [
+              { method: 'upi', flows: ['collect'] }
+            ]
           }
         },
         theme: {
