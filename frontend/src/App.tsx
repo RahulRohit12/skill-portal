@@ -25,7 +25,6 @@ const AdminScannerPage = lazy(() => import('./pages/AdminScannerPage').then(m =>
 const CompanyQuestionsPage = lazy(() => import('./pages/CompanyQuestionsPage').then(m => ({ default: m.CompanyQuestionsPage })));
 const JobsPage = lazy(() => import('./pages/JobsPage').then(m => ({ default: m.JobsPage })));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then(m => ({ default: m.NotificationsPage })));
-const EnrollmentPaymentPage = lazy(() => import('./pages/EnrollmentPaymentPage').then(m => ({ default: m.EnrollmentPaymentPage })));
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean }> = ({
   children,
@@ -55,9 +54,8 @@ export const App: React.FC = () => {
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Suspense fallback={<LoadingSpinner fullPage message="Loading Skill Portal..." />}>
             <Routes>
-              {/* Public Login & Enrollment Payment */}
+              {/* Public Login */}
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/enroll/:token" element={<EnrollmentPaymentPage />} />
 
               {/* Protected Student Portal Layout */}
               <Route
