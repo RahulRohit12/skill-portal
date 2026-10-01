@@ -98,6 +98,16 @@ public class AdminService {
         adminRepository.assignStudentBatch(userId, batchId);
     }
 
+    @Transactional
+    public void deleteStudent(Long userId) {
+        adminRepository.deleteStudent(userId);
+    }
+
+    @Transactional
+    public int deleteAllStudents() {
+        return adminRepository.deleteAllStudents();
+    }
+
     // ==========================================
     // BATCH MANAGEMENT
     // ==========================================

@@ -95,6 +95,23 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success("Student batch assigned", null));
     }
 
+    @DeleteMapping("/students/{id}")
+    @Operation(summary = "Permanently delete a student account and all academic data")
+    public ResponseEntity<ApiResponse<Void>> deleteStudent(@PathVariable Long id) {
+        adminService.deleteStudent(id);
+        return ResponseEntity.ok(ApiResponse.success("Student deleted successfully", null));
+    }
+
+    @DeleteMapping("/students")
+    @Operation(summary = "Permanently delete all student accounts (Admins & Teachers are protected)")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteAllStudents() {
+        int deletedCount = adminService.deleteAllStudents();
+        return ResponseEntity.ok(ApiResponse.success(
+                deletedCount + " student(s) deleted successfully",
+                Map.of("deletedCount", deletedCount)
+        ));
+    }
+
     // ==========================================
     // BATCH MANAGEMENT
     // ==========================================

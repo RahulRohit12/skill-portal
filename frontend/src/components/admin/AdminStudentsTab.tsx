@@ -29,7 +29,8 @@ import {
   Mail,
   MessageSquare,
   Send,
-  Phone
+  Phone,
+  Trash2
 } from 'lucide-react';
 import api from '../../api/client';
 import {
@@ -88,6 +89,12 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailTab, setDetailTab] = useState<'profile' | 'attendance' | 'assignments' | 'tests' | 'coding' | 'activity' | 'qr'>('profile');
   const [regeneratingQr, setRegeneratingQr] = useState(false);
+
+  // Student deletion states
+  const [deletingStudentId, setDeletingStudentId] = useState<number | null>(null);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
+  const [deletingAll, setDeletingAll] = useState(false);
 
   // Form states for Add Student
   const [addForm, setAddForm] = useState({
@@ -285,6 +292,49 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
       showNotification(`Student status updated to ${newStatus}.`);
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to update student status.');
+    }
+  };
+
+  // Delete a single student
+  const handleDeleteStudent = async (student: StudentAdminItem) => {
+    const studentName = student.name || 'this student';
+    const identifier = student.studentIdNumber || student.email;
+    const confirmed = window.confirm(
+      `Are you sure you want to permanently delete student "${studentName}" (${identifier})?\n\nThis will permanently delete their account, attendance, test scores, and enrollment records.\n\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingStudentId(student.userId);
+    try {
+      await api.delete(`/admin/students/${student.userId}`);
+      setStudents((prev) => prev.filter((s) => s.userId !== student.userId));
+      showNotification(`Student "${studentName}" was permanently deleted.`);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete student.');
+    } finally {
+      setDeletingStudentId(null);
+    }
+  };
+
+  // Delete all students
+  const handleConfirmDeleteAll = async () => {
+    if (deleteAllConfirmText.trim() !== 'DELETE ALL') {
+      alert('Please type "DELETE ALL" exactly in uppercase to confirm.');
+      return;
+    }
+
+    setDeletingAll(true);
+    try {
+      const res = await api.delete('/admin/students');
+      const count = res.data?.data?.deletedCount ?? students.length;
+      setStudents([]);
+      setShowDeleteAllModal(false);
+      setDeleteAllConfirmText('');
+      showNotification(`All ${count} student accounts and records were permanently deleted.`);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete all students.');
+    } finally {
+      setDeletingAll(false);
     }
   };
 
@@ -525,7 +575,7 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <button
               onClick={() => fetchStudents()}
               className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
@@ -533,6 +583,20 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
             >
               <RefreshCw className="w-4 h-4" />
             </button>
+            {students.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteAllConfirmText('');
+                  setShowDeleteAllModal(true);
+                }}
+                className="px-3.5 py-2.5 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/70 text-red-600 dark:text-red-400 text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                title="Permanently Delete All Students (Admins & Instructors are protected)"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete All Students</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 setFormError(null);
@@ -697,6 +761,16 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
                         title="Reset Account Password"
                       >
                         <Key className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Delete Student */}
+                      <button
+                        onClick={() => handleDeleteStudent(student)}
+                        disabled={deletingStudentId === student.userId}
+                        className="p-1.5 rounded-lg border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors disabled:opacity-50"
+                        title="Delete Student Account"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </td>
                   </tr>
@@ -1995,6 +2069,84 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* DELETE ALL STUDENTS CONFIRMATION MODAL */}
+      {/* ========================================================= */}
+      {showDeleteAllModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-red-200 dark:border-red-900/60 w-full max-w-md shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-red-100 dark:bg-red-950/60 flex items-center justify-center text-red-600 dark:text-red-400">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">Delete All Students</h3>
+                  <p className="text-[11px] text-red-600 dark:text-red-400 font-medium">Permanent Bulk Action</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowDeleteAllModal(false);
+                  setDeleteAllConfirmText('');
+                }}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-xs text-red-700 dark:text-red-300 leading-relaxed space-y-1.5">
+              <p className="font-bold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                This will permanently delete all {students.length} student account(s)!
+              </p>
+              <p className="text-[11px]">
+                All student profiles, attendance records, test attempts, coding submissions, and academic milestones will be erased.
+              </p>
+              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
+                ✓ Platform Admin and Teacher accounts are strictly protected and will remain untouched.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                Type <span className="font-mono text-red-600 dark:text-red-400 font-black">DELETE ALL</span> to confirm:
+              </label>
+              <input
+                type="text"
+                value={deleteAllConfirmText}
+                onChange={(e) => setDeleteAllConfirmText(e.target.value)}
+                placeholder="DELETE ALL"
+                className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteAllModal(false);
+                  setDeleteAllConfirmText('');
+                }}
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteAll}
+                disabled={deletingAll || deleteAllConfirmText.trim() !== 'DELETE ALL'}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{deletingAll ? 'Deleting All...' : 'Confirm Delete All Students'}</span>
+              </button>
             </div>
           </div>
         </div>

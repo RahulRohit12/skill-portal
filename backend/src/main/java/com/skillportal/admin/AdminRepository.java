@@ -1,5 +1,6 @@
 package com.skillportal.admin;
 
+import com.skillportal.exception.ResourceNotFoundException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -412,6 +413,98 @@ public class AdminRepository {
 
     public void assignStudentBatch(Long userId, Long batchId) {
         jdbcTemplate.update("UPDATE students SET batch_id = ? WHERE user_id = ?", batchId, userId);
+    }
+
+    public void deleteStudent(Long userId) {
+        // 1. Verify user is actually a student
+        Integer isStudent = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM users WHERE id = ? AND role = 'ROLE_STUDENT'",
+                Integer.class, userId);
+        if (isStudent == null || isStudent == 0) {
+            throw new ResourceNotFoundException("Student not found with user ID: " + userId);
+        }
+
+        // 2. Fetch student profile IDs
+        List<Long> studentIds = jdbcTemplate.query(
+                "SELECT id FROM students WHERE user_id = ?",
+                (rs, rowNum) -> rs.getLong("id"), userId);
+
+        for (Long studentId : studentIds) {
+            jdbcTemplate.update("DELETE FROM attendance_audit_log WHERE student_id = ?", studentId);
+            jdbcTemplate.update("DELETE FROM attendance_records WHERE student_id = ?", studentId);
+            jdbcTemplate.update("DELETE FROM enrollments WHERE student_id = ?", studentId);
+            jdbcTemplate.update("DELETE FROM students WHERE id = ?", studentId);
+        }
+
+        // 3. Clear user activities, attempts, and auxiliary records
+        jdbcTemplate.update("UPDATE student_enrollments SET student_user_id = NULL WHERE student_user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM job_applications WHERE user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM student_job_preferences WHERE user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM video_progress WHERE user_id = ?", userId);
+
+        List<Long> attemptIds = jdbcTemplate.query(
+                "SELECT id FROM test_attempts WHERE user_id = ?",
+                (rs, rowNum) -> rs.getLong("id"), userId);
+        for (Long attemptId : attemptIds) {
+            jdbcTemplate.update("DELETE FROM test_answers WHERE attempt_id = ?", attemptId);
+        }
+        jdbcTemplate.update("DELETE FROM test_attempts WHERE user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM question_attempts WHERE user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM coding_submissions WHERE user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM progress_events WHERE user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM bookmarks WHERE user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM notifications WHERE user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM refresh_tokens WHERE user_id = ?", userId);
+        jdbcTemplate.update("DELETE FROM audit_logs WHERE user_id = ?", userId);
+
+        // 4. Finally delete the student user record
+        jdbcTemplate.update("DELETE FROM users WHERE id = ? AND role = 'ROLE_STUDENT'", userId);
+    }
+
+    public int deleteAllStudents() {
+        // 1. Identify all student user IDs
+        List<Long> studentUserIds = jdbcTemplate.query(
+                "SELECT id FROM users WHERE role = 'ROLE_STUDENT'",
+                (rs, rowNum) -> rs.getLong("id"));
+
+        if (studentUserIds.isEmpty()) {
+            return 0;
+        }
+
+        // 2. Clear attendance & course enrollments
+        List<Long> studentIds = jdbcTemplate.query(
+                "SELECT id FROM students",
+                (rs, rowNum) -> rs.getLong("id"));
+        for (Long studentId : studentIds) {
+            jdbcTemplate.update("DELETE FROM attendance_audit_log WHERE student_id = ?", studentId);
+            jdbcTemplate.update("DELETE FROM attendance_records WHERE student_id = ?", studentId);
+            jdbcTemplate.update("DELETE FROM enrollments WHERE student_id = ?", studentId);
+        }
+        jdbcTemplate.update("DELETE FROM students");
+
+        // 3. Clear auxiliary tables for students
+        jdbcTemplate.update("UPDATE student_enrollments SET student_user_id = NULL");
+        jdbcTemplate.update("DELETE FROM job_applications WHERE user_id IN (SELECT id FROM users WHERE role = 'ROLE_STUDENT')");
+        jdbcTemplate.update("DELETE FROM student_job_preferences WHERE user_id IN (SELECT id FROM users WHERE role = 'ROLE_STUDENT')");
+        jdbcTemplate.update("DELETE FROM video_progress WHERE user_id IN (SELECT id FROM users WHERE role = 'ROLE_STUDENT')");
+
+        List<Long> attemptIds = jdbcTemplate.query(
+                "SELECT id FROM test_attempts WHERE user_id IN (SELECT id FROM users WHERE role = 'ROLE_STUDENT')",
+                (rs, rowNum) -> rs.getLong("id"));
+        for (Long attemptId : attemptIds) {
+            jdbcTemplate.update("DELETE FROM test_answers WHERE attempt_id = ?", attemptId);
+        }
+        jdbcTemplate.update("DELETE FROM test_attempts WHERE user_id IN (SELECT id FROM users WHERE role = 'ROLE_STUDENT')");
+        jdbcTemplate.update("DELETE FROM question_attempts WHERE user_id IN (SELECT id FROM users WHERE role = 'ROLE_STUDENT')");
+        jdbcTemplate.update("DELETE FROM coding_submissions WHERE user_id IN (SELECT id FROM users WHERE role = 'ROLE_STUDENT')");
+        jdbcTemplate.update("DELETE FROM progress_events WHERE user_id IN (SELECT id FROM users WHERE role = 'ROLE_STUDENT')");
+        jdbcTemplate.update("DELETE FROM bookmarks WHERE user_id IN (SELECT id FROM users WHERE role = 'ROLE_STUDENT')");
+        jdbcTemplate.update("DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE role = 'ROLE_STUDENT')");
+        jdbcTemplate.update("DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE role = 'ROLE_STUDENT')");
+        jdbcTemplate.update("DELETE FROM audit_logs WHERE user_id IN (SELECT id FROM users WHERE role = 'ROLE_STUDENT')");
+
+        // 4. Delete only student users (Admins & Teachers are strictly protected)
+        return jdbcTemplate.update("DELETE FROM users WHERE role = 'ROLE_STUDENT'");
     }
 
     // ==========================================
