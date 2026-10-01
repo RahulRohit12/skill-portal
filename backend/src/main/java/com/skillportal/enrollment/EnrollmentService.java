@@ -136,6 +136,11 @@ public class EnrollmentService {
         resp.setPaid("PAID".equalsIgnoreCase(record.paymentStatus) || "COMPLETED".equalsIgnoreCase(record.enrollmentStatus));
         resp.setLiveGateway(razorpayService.isLiveRazorpayConfigured());
 
+        Map<String, String> qrSettings = enrollmentRepository.getRazorpayQrSettings();
+        resp.setRazorpayQrImageUrl(qrSettings.get("razorpay_qr_image_url"));
+        resp.setRazorpayUpiId(qrSettings.get("razorpay_upi_id"));
+        resp.setRazorpayPaymentLink(qrSettings.get("razorpay_payment_link"));
+
         return resp;
     }
 
@@ -244,6 +249,64 @@ public class EnrollmentService {
         res.put("batchName", record.batchName);
         res.put("courseTitle", record.courseTitle);
         res.put("paymentId", req.getRazorpayPaymentId());
+
+        return res;
+    }
+
+    /**
+     * UPI QR / UTR PAYMENT VERIFICATION & STUDENT ACTIVATION:
+     * When student pays directly via merchant Razorpay QR code or UPI ID,
+     * they enter their 12-digit UPI UTR / Transaction Reference number.
+     * Activates student account and creates login credentials.
+     */
+    @Transactional
+    public Map<String, Object> verifyUtrAndActivate(String token, EnrollmentDto.VerifyUtrRequest req) {
+        EnrollmentRepository.EnrollmentRecord record = enrollmentRepository.findByToken(token)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment record not found."));
+
+        // Idempotency: If already paid and active, return existing userId
+        if ("COMPLETED".equals(record.enrollmentStatus) && record.studentUserId != null) {
+            Map<String, Object> res = new HashMap<>();
+            res.put("success", true);
+            res.put("message", "Payment already verified. Student account is active.");
+            res.put("userId", record.studentUserId);
+            res.put("email", record.email);
+            res.put("studentIdNumber", record.studentIdNumber);
+            return res;
+        }
+
+        if (req == null || req.getUtr() == null || req.getUtr().trim().length() < 6) {
+            throw new BadRequestException("Please enter a valid UPI Transaction ID / UTR number (minimum 6 characters).");
+        }
+
+        String cleanUtr = req.getUtr().trim().toUpperCase();
+
+        // Optional password set by student during payment checkout
+        String passwordHash = null;
+        if (req.getPassword() != null && req.getPassword().length() >= 6) {
+            passwordHash = passwordEncoder.encode(req.getPassword());
+        }
+
+        // Activate Student with UTR reference
+        Long userId = enrollmentRepository.markPaymentSuccessAndActivate(
+                record,
+                "UTR:" + cleanUtr,
+                "QR_MANUAL_UTR",
+                passwordHash
+        );
+
+        log.info("Student {} activated via UPI QR UTR {} for enrollment {}", record.email, cleanUtr, token);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("success", true);
+        res.put("message", "UPI Payment verified successfully! Student account activated.");
+        res.put("userId", userId);
+        res.put("email", record.email);
+        res.put("fullName", record.fullName);
+        res.put("studentIdNumber", record.studentIdNumber);
+        res.put("batchName", record.batchName);
+        res.put("courseTitle", record.courseTitle);
+        res.put("paymentId", "UTR:" + cleanUtr);
 
         return res;
     }
@@ -414,5 +477,24 @@ public class EnrollmentService {
         resp.put("whatsappUrl", whatsappUrl);
         resp.put("smsUrl", smsUrl);
         return resp;
+    }
+
+    public Map<String, String> getRazorpayQrSettings() {
+        return enrollmentRepository.getRazorpayQrSettings();
+    }
+
+    @Transactional
+    public void saveRazorpayQrSettings(EnrollmentDto.RazorpayQrSettingsRequest req) {
+        if (req != null) {
+            if (req.getRazorpayQrImageUrl() != null) {
+                enrollmentRepository.saveRazorpayQrSetting("razorpay_qr_image_url", req.getRazorpayQrImageUrl().trim());
+            }
+            if (req.getRazorpayUpiId() != null) {
+                enrollmentRepository.saveRazorpayQrSetting("razorpay_upi_id", req.getRazorpayUpiId().trim());
+            }
+            if (req.getRazorpayPaymentLink() != null) {
+                enrollmentRepository.saveRazorpayQrSetting("razorpay_payment_link", req.getRazorpayPaymentLink().trim());
+            }
+        }
     }
 }

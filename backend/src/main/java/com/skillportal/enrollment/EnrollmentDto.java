@@ -97,6 +97,18 @@ public class EnrollmentDto {
         private String razorpayKeyId;
         private boolean isPaid;
         private boolean liveGateway;
+        private String razorpayQrImageUrl;
+        private String razorpayUpiId;
+        private String razorpayPaymentLink;
+
+        public String getRazorpayQrImageUrl() { return razorpayQrImageUrl; }
+        public void setRazorpayQrImageUrl(String razorpayQrImageUrl) { this.razorpayQrImageUrl = razorpayQrImageUrl; }
+
+        public String getRazorpayUpiId() { return razorpayUpiId; }
+        public void setRazorpayUpiId(String razorpayUpiId) { this.razorpayUpiId = razorpayUpiId; }
+
+        public String getRazorpayPaymentLink() { return razorpayPaymentLink; }
+        public void setRazorpayPaymentLink(String razorpayPaymentLink) { this.razorpayPaymentLink = razorpayPaymentLink; }
 
         public String getEnrollmentToken() { return enrollmentToken; }
         public void setEnrollmentToken(String enrollmentToken) { this.enrollmentToken = enrollmentToken; }
@@ -299,5 +311,31 @@ public class EnrollmentDto {
 
         public String getPassword() { return password; }
         public void setPassword(String password) { this.password = password; }
+    }
+
+    public static class VerifyUtrRequest {
+        private String utr;
+        private String password;
+
+        public String getUtr() { return utr; }
+        public void setUtr(String utr) { this.utr = utr; }
+
+        public String getPassword() { return password; }
+        public void setPassword(String password) { this.password = password; }
+    }
+
+    public static class RazorpayQrSettingsRequest {
+        private String razorpayQrImageUrl;
+        private String razorpayUpiId;
+        private String razorpayPaymentLink;
+
+        public String getRazorpayQrImageUrl() { return razorpayQrImageUrl; }
+        public void setRazorpayQrImageUrl(String razorpayQrImageUrl) { this.razorpayQrImageUrl = razorpayQrImageUrl; }
+
+        public String getRazorpayUpiId() { return razorpayUpiId; }
+        public void setRazorpayUpiId(String razorpayUpiId) { this.razorpayUpiId = razorpayUpiId; }
+
+        public String getRazorpayPaymentLink() { return razorpayPaymentLink; }
+        public void setRazorpayPaymentLink(String razorpayPaymentLink) { this.razorpayPaymentLink = razorpayPaymentLink; }
     }
 }

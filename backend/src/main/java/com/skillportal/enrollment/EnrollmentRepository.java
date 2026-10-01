@@ -337,6 +337,26 @@ public class EnrollmentRepository {
         return item;
     };
 
+    public Map<String, String> getRazorpayQrSettings() {
+        Map<String, String> map = new HashMap<>();
+        try {
+            jdbcTemplate.query(
+                    "SELECT setting_key, setting_value FROM app_settings WHERE setting_key IN ('razorpay_qr_image_url', 'razorpay_upi_id', 'razorpay_payment_link')",
+                    (rs) -> {
+                        map.put(rs.getString("setting_key"), rs.getString("setting_value"));
+                    });
+        } catch (Exception e) {
+            log.warn("Error reading QR settings from app_settings: {}", e.getMessage());
+        }
+        return map;
+    }
+
+    public void saveRazorpayQrSetting(String key, String value) {
+        jdbcTemplate.update(
+                "INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)",
+                key, value != null ? value.trim() : "");
+    }
+
     public static class EnrollmentRecord {
         public Long id;
         public String enrollmentToken;

@@ -56,4 +56,18 @@ public class AdminEnrollmentController {
         java.util.Map<String, Object> result = enrollmentService.getShareMessage(token);
         return ResponseEntity.ok(ApiResponse.success("Share message generated", result));
     }
+
+    @GetMapping("/settings/razorpay-qr")
+    @Operation(summary = "Get Razorpay merchant QR image URL and UPI ID settings")
+    public ResponseEntity<ApiResponse<java.util.Map<String, String>>> getQrSettings() {
+        return ResponseEntity.ok(ApiResponse.success(enrollmentService.getRazorpayQrSettings()));
+    }
+
+    @PostMapping("/settings/razorpay-qr")
+    @Operation(summary = "Update Razorpay merchant QR image URL and UPI ID settings")
+    public ResponseEntity<ApiResponse<java.util.Map<String, String>>> updateQrSettings(
+            @RequestBody EnrollmentDto.RazorpayQrSettingsRequest req) {
+        enrollmentService.saveRazorpayQrSettings(req);
+        return ResponseEntity.ok(ApiResponse.success("Razorpay QR settings saved successfully", enrollmentService.getRazorpayQrSettings()));
+    }
 }

@@ -1142,6 +1142,9 @@ export interface StudentEnrollmentDetailResponse {
   razorpayKeyId?: string;
   paid: boolean;
   liveGateway?: boolean;
+  razorpayQrImageUrl?: string;
+  razorpayUpiId?: string;
+  razorpayPaymentLink?: string;
 }
 
 export interface RazorpayOrderCreateResponse {

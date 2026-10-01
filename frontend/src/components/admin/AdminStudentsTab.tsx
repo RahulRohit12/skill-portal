@@ -117,6 +117,47 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
   const [confirmPassword, setConfirmPassword] = useState('');
   const [pwdError, setPwdError] = useState<string | null>(null);
 
+  // QR Settings modal states
+  const [showQrSettingsModal, setShowQrSettingsModal] = useState(false);
+  const [qrImageUrl, setQrImageUrl] = useState('');
+  const [upiId, setUpiId] = useState('');
+  const [savingQrSettings, setSavingQrSettings] = useState(false);
+  const [qrSettingsError, setQrSettingsError] = useState<string | null>(null);
+  const [qrSettingsSuccess, setQrSettingsSuccess] = useState<string | null>(null);
+
+  const fetchQrSettings = async () => {
+    try {
+      const res = await api.get('/admin/enrollments/settings/razorpay-qr');
+      const data = res.data?.data || {};
+      if (data.razorpay_qr_image_url) setQrImageUrl(data.razorpay_qr_image_url);
+      if (data.razorpay_upi_id) setUpiId(data.razorpay_upi_id);
+    } catch (err: any) {
+      console.error('Failed to load QR settings', err);
+    }
+  };
+
+  const handleSaveQrSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingQrSettings(true);
+    setQrSettingsError(null);
+    setQrSettingsSuccess(null);
+    try {
+      await api.post('/admin/enrollments/settings/razorpay-qr', {
+        razorpayQrImageUrl: qrImageUrl.trim() || undefined,
+        razorpayUpiId: upiId.trim() || undefined,
+      });
+      setQrSettingsSuccess('Razorpay QR settings updated successfully!');
+      setTimeout(() => {
+        setShowQrSettingsModal(false);
+        setQrSettingsSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      setQrSettingsError(err.response?.data?.message || 'Failed to update QR settings.');
+    } finally {
+      setSavingQrSettings(false);
+    }
+  };
+
   const fetchStudents = async () => {
     setLoading(true);
     setError(null);
@@ -805,6 +846,17 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
                   title="Refresh Enrollments"
                 >
                   <RefreshCw className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    fetchQrSettings();
+                    setShowQrSettingsModal(true);
+                  }}
+                  className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                  title="Configure Razorpay QR image URL and UPI ID"
+                >
+                  <QrCode className="w-4 h-4 text-brand-600" />
+                  <span>Razorpay QR Setup</span>
                 </button>
                 <button
                   onClick={() => {
@@ -2148,6 +2200,103 @@ export const AdminStudentsTab: React.FC<AdminStudentsTabProps> = ({ batches, cou
                 <span>{deletingAll ? 'Deleting All...' : 'Confirm Delete All Students'}</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* RAZORPAY QR SETTINGS MODAL */}
+      {/* ========================================================= */}
+      {showQrSettingsModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <QrCode className="w-5 h-5 text-brand-600" />
+                <h3 className="font-black text-sm text-slate-900 dark:text-white">
+                  Configure Razorpay QR & UPI
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowQrSettingsModal(false);
+                  setQrSettingsError(null);
+                  setQrSettingsSuccess(null);
+                }}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Enter your Razorpay merchant QR image URL or UPI ID to display directly on student enrollment payment forms.
+            </p>
+
+            {qrSettingsError && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{qrSettingsError}</span>
+              </div>
+            )}
+
+            {qrSettingsSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-medium flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{qrSettingsSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveQrSettings} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Razorpay QR Code Image Link (URL)
+                </label>
+                <input
+                  type="url"
+                  value={qrImageUrl}
+                  onChange={(e) => setQrImageUrl(e.target.value)}
+                  placeholder="https://... or hosted QR image URL"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Direct image link from Razorpay dashboard or image hosting.
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Razorpay Merchant UPI ID / VPA
+                </label>
+                <input
+                  type="text"
+                  value={upiId}
+                  onChange={(e) => setUpiId(e.target.value)}
+                  placeholder="e.g. merchant@icici or skillex@razorpay"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  If provided, a dynamic UPI QR code with course fee is auto-generated.
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowQrSettingsModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingQrSettings}
+                  className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-sm"
+                >
+                  {savingQrSettings ? 'Saving...' : 'Save QR Settings'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

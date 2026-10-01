@@ -25,7 +25,9 @@ import {
   Edit3,
   Copy,
   Key,
+  Settings,
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import api from '../api/client';
 import { StudentEnrollmentDetailResponse, RazorpayOrderCreateResponse } from '../types';
 
@@ -62,6 +64,17 @@ export const EnrollmentPaymentPage: React.FC = () => {
   const [copiedEmail, setCopiedEmail] = useState<boolean>(false);
   const [copiedPassword, setCopiedPassword] = useState<boolean>(false);
 
+  // UPI QR & UTR states
+  const [utrNumber, setUtrNumber] = useState<string>('');
+  const [verifyingUtr, setVerifyingUtr] = useState<boolean>(false);
+  const [copiedUpiId, setCopiedUpiId] = useState<boolean>(false);
+  const [showQrConfigModal, setShowQrConfigModal] = useState<boolean>(false);
+  const [configQrImageUrl, setConfigQrImageUrl] = useState<string>('');
+  const [configUpiId, setConfigUpiId] = useState<string>('');
+  const [savingQrConfig, setSavingQrConfig] = useState<boolean>(false);
+  const [qrConfigSuccess, setQrConfigSuccess] = useState<string | null>(null);
+  const [qrConfigError, setQrConfigError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!token) {
       setError('Invalid enrollment token.');
@@ -78,6 +91,12 @@ export const EnrollmentPaymentPage: React.FC = () => {
         setDetails(data);
         if (data?.email) {
           setEditEmail(data.email);
+        }
+        if (data?.razorpayQrImageUrl) {
+          setConfigQrImageUrl(data.razorpayQrImageUrl);
+        }
+        if (data?.razorpayUpiId) {
+          setConfigUpiId(data.razorpayUpiId);
         }
       } catch (err: any) {
         console.error('Failed to load enrollment details', err);
@@ -341,6 +360,72 @@ export const EnrollmentPaymentPage: React.FC = () => {
       setCredentialUpdateError(msg);
     } finally {
       setUpdatingCredentials(false);
+    }
+  };
+
+  // Submit 12-digit UPI UTR for payment verification and instant activation
+  const handleVerifyUtr = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!token || !utrNumber.trim()) {
+      setPaymentFailedMsg('Please enter your 12-digit UPI Reference Number / UTR.');
+      return;
+    }
+    if (utrNumber.trim().length < 6) {
+      setPaymentFailedMsg('UTR / Transaction reference number must be at least 6 characters.');
+      return;
+    }
+
+    setVerifyingUtr(true);
+    setPaymentFailedMsg(null);
+
+    try {
+      const res = await api.post(`/enrollment/verify-utr/${token}`, {
+        utr: utrNumber.trim(),
+        password: password.trim() || undefined,
+      });
+
+      const successData = res.data?.data || { success: true };
+      setPaymentSuccess(successData);
+      if (successData.email) {
+        setEditEmail(successData.email);
+      }
+    } catch (err: any) {
+      console.error('UTR verification failed', err);
+      setPaymentFailedMsg(
+        err.response?.data?.message ||
+        'Failed to verify UPI UTR. Please ensure the transaction reference number is correct.'
+      );
+    } finally {
+      setVerifyingUtr(false);
+    }
+  };
+
+  // Admin saves Razorpay QR settings
+  const handleSaveQrConfig = async () => {
+    setSavingQrConfig(true);
+    setQrConfigError(null);
+    setQrConfigSuccess(null);
+    try {
+      await api.post('/admin/enrollments/settings/razorpay-qr', {
+        razorpayQrImageUrl: configQrImageUrl.trim() || undefined,
+        razorpayUpiId: configUpiId.trim() || undefined,
+      });
+      setQrConfigSuccess('Razorpay QR settings saved successfully!');
+      if (details) {
+        setDetails({
+          ...details,
+          razorpayQrImageUrl: configQrImageUrl.trim() || undefined,
+          razorpayUpiId: configUpiId.trim() || undefined,
+        });
+      }
+      setTimeout(() => {
+        setShowQrConfigModal(false);
+        setQrConfigSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      setQrConfigError(err.response?.data?.message || 'Failed to save settings. Please verify administrator permissions.');
+    } finally {
+      setSavingQrConfig(false);
     }
   };
 
@@ -859,6 +944,137 @@ export const EnrollmentPaymentPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* UPI & QR Code Scan Section */}
+                {selectedMethod === 'upi' && (
+                  <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-500/30 space-y-4 shadow-lg shadow-cyan-950/20">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                          <QrCode className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black text-white uppercase tracking-wider">
+                            Razorpay UPI QR Code
+                          </h4>
+                          <p className="text-[10px] text-slate-400">
+                            Scan with GPay, PhonePe, Paytm, or any UPI App
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowQrConfigModal(true)}
+                        className="text-[10px] font-bold text-slate-400 hover:text-cyan-400 flex items-center gap-1 transition-colors px-2 py-1 rounded-lg border border-slate-800 hover:border-slate-700"
+                        title="Configure Razorpay QR Image Link or UPI ID"
+                      >
+                        <Settings className="w-3 h-3" />
+                        <span>Update QR</span>
+                      </button>
+                    </div>
+
+                    {/* QR Code Container */}
+                    <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl border-2 border-cyan-400/30 shadow-inner">
+                      {details?.razorpayQrImageUrl ? (
+                        <img
+                          src={details.razorpayQrImageUrl}
+                          alt="Razorpay QR Code"
+                          className="w-48 h-48 sm:w-56 sm:h-56 object-contain rounded-xl"
+                        />
+                      ) : details?.razorpayUpiId ? (
+                        <QRCodeSVG
+                          value={`upi://pay?pa=${encodeURIComponent(details.razorpayUpiId)}&pn=${encodeURIComponent('Skillex Academy')}&am=${details.amountInRupees}&cu=INR&tn=${encodeURIComponent(`Enrollment ${details.studentIdNumber || details.fullName}`)}`}
+                          size={200}
+                          level="H"
+                          includeMargin={true}
+                        />
+                      ) : (
+                        <div className="w-48 h-48 sm:w-56 sm:h-56 flex flex-col items-center justify-center text-center p-4 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                          <QrCode className="w-12 h-12 text-slate-400 mb-2 stroke-1" />
+                          <p className="text-xs font-bold text-slate-800">Scan & Pay via UPI</p>
+                          <p className="text-[10px] text-slate-500 mt-1">
+                            Click &quot;Update QR&quot; above to paste your merchant QR image link or UPI ID.
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="mt-3 text-center w-full">
+                        <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest block">
+                          Amount to Pay
+                        </span>
+                        <div className="text-2xl font-black text-slate-900 tracking-tight">
+                          ₹{details?.amountInRupees?.toLocaleString('en-IN')}
+                        </div>
+
+                        {details?.razorpayUpiId && (
+                          <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-lg text-xs font-mono font-bold text-slate-700 border border-slate-200">
+                            <span>UPI ID: {details.razorpayUpiId}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(details.razorpayUpiId || '');
+                                setCopiedUpiId(true);
+                                setTimeout(() => setCopiedUpiId(false), 2000);
+                              }}
+                              className="text-cyan-600 hover:text-cyan-700 font-sans text-[11px] underline"
+                            >
+                              {copiedUpiId ? 'Copied!' : 'Copy'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Supported App Badges */}
+                    <div className="flex items-center justify-center gap-2 py-1 text-[10px] font-bold text-slate-400">
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-blue-300">Google Pay</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-purple-300">PhonePe</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-sky-300">Paytm</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-300">BHIM</span>
+                    </div>
+
+                    {/* UTR Verification Section */}
+                    <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2.5">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span className="text-xs font-bold text-slate-200">
+                          Already paid? Enter 12-digit UPI Reference / UTR
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-relaxed">
+                        After paying via Google Pay, PhonePe, or Paytm, copy the 12-digit &quot;UPI Ref No.&quot; or &quot;UTR&quot; from your app and paste it below for instant activation.
+                      </p>
+
+                      <form onSubmit={handleVerifyUtr} className="flex flex-col sm:flex-row gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={utrNumber}
+                          onChange={(e) => setUtrNumber(e.target.value.replace(/[^A-Za-z0-9]/g, ''))}
+                          placeholder="e.g. 427189123456"
+                          maxLength={22}
+                          className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 font-mono text-xs focus:ring-2 focus:ring-cyan-400 outline-none uppercase"
+                        />
+                        <button
+                          type="submit"
+                          disabled={verifyingUtr || !utrNumber.trim()}
+                          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs transition-all shadow-md shadow-emerald-500/20 disabled:opacity-50 flex items-center justify-center gap-1.5 shrink-0"
+                        >
+                          {verifyingUtr ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                              <span>Activating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Verify & Activate</span>
+                            </>
+                          )}
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
                 {/* Pay Now Button */}
                 <div className="space-y-3 pt-2">
                   <button
@@ -879,7 +1095,7 @@ export const EnrollmentPaymentPage: React.FC = () => {
                     ) : selectedMethod === 'upi' ? (
                       <>
                         <QrCode className="w-5 h-5 text-slate-950 stroke-[2.5]" />
-                        <span>PAY ₹{details?.amountInRupees?.toLocaleString('en-IN')} VIA UPI / QR / GPAY</span>
+                        <span>OR PAY VIA RAZORPAY CHECKOUT MODAL</span>
                       </>
                     ) : selectedMethod === 'card' ? (
                       <>
@@ -997,6 +1213,100 @@ export const EnrollmentPaymentPage: React.FC = () => {
                   className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors text-center"
                 >
                   Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* QR Code Configuration Modal */}
+        {showQrConfigModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-slate-700/80 p-6 space-y-4 text-left relative shadow-2xl">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                <div className="flex items-center gap-2">
+                  <QrCode className="w-5 h-5 text-cyan-400" />
+                  <h3 className="text-sm font-black text-white">Configure Razorpay QR & UPI</h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowQrConfigModal(false);
+                    setQrConfigError(null);
+                    setQrConfigSuccess(null);
+                  }}
+                  className="p-1 text-slate-400 hover:text-white rounded-lg"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-400">
+                Paste your Razorpay QR image link or merchant UPI ID to display directly on the student enrollment payment page.
+              </p>
+
+              {qrConfigError && (
+                <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{qrConfigError}</span>
+                </div>
+              )}
+
+              {qrConfigSuccess && (
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{qrConfigSuccess}</span>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                    Razorpay QR Code Image Link (URL)
+                  </label>
+                  <input
+                    type="url"
+                    value={configQrImageUrl}
+                    onChange={(e) => setConfigQrImageUrl(e.target.value)}
+                    placeholder="https://... or data:image/png..."
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-cyan-400"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    Direct image link from Razorpay dashboard or image hosting.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                    Razorpay Merchant UPI ID / VPA
+                  </label>
+                  <input
+                    type="text"
+                    value={configUpiId}
+                    onChange={(e) => setConfigUpiId(e.target.value)}
+                    placeholder="e.g. merchant@icici or skillex@razorpay"
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-cyan-400"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    If provided, a dynamic UPI QR code with course fee is auto-generated.
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowQrConfigModal(false)}
+                  className="px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={savingQrConfig}
+                  onClick={handleSaveQrConfig}
+                  className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 disabled:opacity-50"
+                >
+                  {savingQrConfig ? 'Saving...' : 'Save Settings'}
                 </button>
               </div>
             </div>

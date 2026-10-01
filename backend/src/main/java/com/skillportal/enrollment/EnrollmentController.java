@@ -44,6 +44,15 @@ public class EnrollmentController {
         return ResponseEntity.ok(ApiResponse.success("Payment verified and student account created successfully", result));
     }
 
+    @PostMapping("/verify-utr/{token}")
+    @Operation(summary = "Verify UPI QR payment via UTR / Transaction Reference number and activate student")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> verifyUtr(
+            @PathVariable String token,
+            @RequestBody EnrollmentDto.VerifyUtrRequest req) {
+        Map<String, Object> result = enrollmentService.verifyUtrAndActivate(token, req);
+        return ResponseEntity.ok(ApiResponse.success("UPI payment verified and student account created successfully", result));
+    }
+
     @PostMapping("/webhook")
     @Operation(summary = "Razorpay Webhook receiver for background payment capture guarantee")
     public ResponseEntity<ApiResponse<String>> webhook(
